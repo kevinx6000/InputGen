@@ -36,11 +36,8 @@ void GenInput::initialize(int n, int k){
 	for(int i = 0; i < totalSwitch; i++)
 		linkMap.push_back(mtmp);
 
-	// Initial value for TCAM and Link Cap.
-	stmp.tcamUsage = TCAM_CAPACITY;
+	// Default: wired links
 	ltmp.isWireless = false;
-	ltmp.linkCapacity = LINK_CAPACITY;
-	ntmp.nodeCapacity = LINK_CAPACITY;
 
 	// Create switch
 	for(int i = 0; i < totalSwitch; i++){
@@ -162,9 +159,12 @@ void GenInput::genInitial(void){
 
 	// Variable
 	int srcID, dstID, linkID;
-	bool ok;
+	bool ok, isWireless;
 	Flow ftmp;
 	PathFlow ptmp;
+
+	// Clear resource
+	clearResource();
 
 	// For each flow
 	for(int flowID = 0; flowID < numOfFlow; flowID++){
@@ -179,8 +179,18 @@ void GenInput::genInitial(void){
 			// Randomly pick destination
 			while((ptmp.dst[0] = rand()%numOfEdge + numOfCore + numOfAggr) == ftmp.src);
 
+			// Wired/wireless path
+			if(rand()%2){
+				isWireless = true;
+				ptmp.traffic = rand()%(LINK_CAPACITY/2)+1;
+			}
+			else{
+				isWireless = false;
+				ptmp.traffic = rand()%LINK_CAPACITY+1;
+			}
+
 			// Shortest path
-			if(findPath(ftmp.src, ptmp)){
+			if(findPath(ftmp.src, ptmp.dst[0], ptmp.hop[0], isWireless, ptmp.traffic)){
 				
 				// Update remaining capacity
 				for(int i = 0; i < (int)ptmp.hop[0].size(); i++){
@@ -211,7 +221,7 @@ void GenInput::genInitial(void){
 			// Not found
 			else{
 				ok = false;
-				fprintf(stderr, "FAILED\n");
+				fprintf(stderr, "INITIAL STATE NOT FOUND\n");
 			}
 		}
 
@@ -222,32 +232,89 @@ void GenInput::genInitial(void){
 
 // Generate final state
 void GenInput::genFinal(void){
-	
+
+	// Variable
+	int srcID, dstID, dstID1, dstID2, linkID;
+	bool isWireless;
+	double traffic;
+
+	// Clear resource
+	clearResource();
+
+	// For each flow
+	for(int flowID = 0; flowID < (int)flows.size(); flowID++){
+
+		// For each path flow
+		for(int pathID = 0; pathID < (int)flows[flowID].pathFlow.size(); pathID++){
+
+			// Only some of path flows need change (50% now)
+			if(rand()%2){
+
+				// Final state remain the same as initial one
+				flows[flowID].pathFlow[pathID].hop[1] = flows[flowID].pathFlow[pathID].hop[0];
+				continue;
+			}
+
+			srcID = flows[flowID].src;
+			dstID1 = flows[flowID].pathFlow[pathID].dst[0];
+			traffic = flows[flowID].pathFlow[pathID].traffic;
+
+			// Randomly pick a destination other than src and dst[0]
+			while((dstID2 = rand()%numOfEdge + numOfCore + numOfAggr) == srcID || dstID2 == dstID1);
+			flows[flowID].pathFlow[pathID].dst[1] = dstID2;
+			
+			// Wired/wirless path
+			if(rand()%2) isWireless = true;
+			else isWireless = false;
+
+			// Shortest path
+			if(findPath(srcID, dstID2, flows[flowID].pathFlow[pathID].hop[1], isWireless, traffic)){
+				
+				// Update remaining capacity
+				for(int i = 0; i < (int)flows[flowID].pathFlow[pathID].hop[1].size(); i++){
+					srcID = flows[flowID].pathFlow[pathID].hop[1][i].srcID;
+					dstID = flows[flowID].pathFlow[pathID].hop[1][i].dstID;
+					linkID = linkMap[srcID][dstID];
+					links[linkID].linkCapacity -= traffic;
+
+					// Wireless link
+					if(links[linkID].isWireless){
+
+						// Transceiver
+						trancNode[ switches[srcID].trancID ].nodeCapacity -= traffic;
+						trancNode[ switches[dstID].trancID ].nodeCapacity -= traffic;
+
+						// Interference
+						for(int j = 0; j < (int)links[linkID].iList.size(); j++){
+							srcID = links[linkID].iList[j];
+							interNode[ switches[srcID].interID ].nodeCapacity -= traffic;
+						}
+					}
+				}
+			}
+
+			// Not found
+			else{
+				pathID--;
+				fprintf(stderr, "FINAL STATE NOT FOUND\n");
+			}
+		}
+	}
 }
 
 // Find feasible path
-bool GenInput::findPath(int src, PathFlow& ptmp){
+bool GenInput::findPath(int src, int dst, vector<Hop>& hopList, bool isWireless, double traffic){
 
 	// Variable
 	int nowID, nxtID;
 	int linkID;
-	bool isWireless, done, fail;
+	bool done, fail;
 	Hop htmp;
 	SearchNode bfsNow, bfsNxt;
 	queue<SearchNode>que;
 	map<int, int>pre;
 	map<int, bool>vis;
 	vector<NodeCap>copyTranc;
-
-	// Wired/wireless path
-	if(rand()%2){
-		isWireless = true;
-		ptmp.traffic = rand()%(LINK_CAPACITY/2)+1;
-	}
-	else{
-		isWireless = false;
-		ptmp.traffic = rand()%LINK_CAPACITY+1;
-	}
 
 	// Initialize interferene node usage
 	bfsNow.interCap.clear();
@@ -272,8 +339,8 @@ bool GenInput::findPath(int src, PathFlow& ptmp){
 
 		// Transceiver node
 		if(isWireless){
-			if(copyTranc[ switches[nowID].trancID ].nodeCapacity < ptmp.traffic) continue;
-			copyTranc[ switches[nowID].trancID ].nodeCapacity -= ptmp.traffic;
+			if(copyTranc[ switches[nowID].trancID ].nodeCapacity < traffic) continue;
+			copyTranc[ switches[nowID].trancID ].nodeCapacity -= traffic;
 		}
 
 		// Search neighbor
@@ -283,12 +350,11 @@ bool GenInput::findPath(int src, PathFlow& ptmp){
 			bfsNxt.ID = nxtID;
 			linkID = switches[nowID].linkID[i];
 
-			if((links[linkID].isWireless && !isWireless) || (!links[linkID].isWireless && isWireless)){
-				continue;
-			}
+			// Not the same type of link with the plan
+			if((links[linkID].isWireless && !isWireless) || (!links[linkID].isWireless && isWireless)) continue;
 
 			// Link capacity
-			if(links[linkID].linkCapacity < ptmp.traffic) continue;
+			if(links[linkID].linkCapacity < traffic) continue;
 
 			// Not visited
 			if(!vis[nxtID]){
@@ -297,18 +363,19 @@ bool GenInput::findPath(int src, PathFlow& ptmp){
 				if(isWireless){
 
 					// Transceiver node
-					if(copyTranc[ switches[nxtID].trancID ].nodeCapacity < ptmp.traffic) continue;
-					copyTranc[ switches[nxtID].trancID ].nodeCapacity -= ptmp.traffic;
+					if(copyTranc[ switches[nxtID].trancID ].nodeCapacity < traffic) continue;
+					copyTranc[ switches[nxtID].trancID ].nodeCapacity -= traffic;
 
+					// Interference node
 					fail = false;
 					for(int j = 0; j < (int)links[linkID].iList.size(); j++){
-						if(bfsNxt.interCap[ links[linkID].iList[j] ] < ptmp.traffic){
+						if(bfsNxt.interCap[ links[linkID].iList[j] ] < traffic){
 							fail = true;
 							break;
 						}
 						else{
 							// Update
-							bfsNxt.interCap[ links[linkID].iList[j] ] -= ptmp.traffic;
+							bfsNxt.interCap[ links[linkID].iList[j] ] -= traffic;
 						}
 					}
 					if(fail) continue;
@@ -318,7 +385,7 @@ bool GenInput::findPath(int src, PathFlow& ptmp){
 				pre[nxtID] = nowID;
 				vis[nxtID] = true;
 				que.push(bfsNxt);
-				if(nxtID == ptmp.dst[0]){
+				if(nxtID == dst){
 					done = true;
 					break;
 				}
@@ -330,18 +397,38 @@ bool GenInput::findPath(int src, PathFlow& ptmp){
 	if(done){
 
 		// Retrieve path
-		nowID = ptmp.dst[0];
-		ptmp.hop[0].clear();
+		nowID = dst;
+		hopList.clear();
 		while(pre[nowID] != nowID){
 			htmp.srcID = pre[nowID];
 			htmp.dstID = nowID;
-			ptmp.hop[0].push_back(htmp);
+			hopList.push_back(htmp);
 			nowID = pre[nowID];
 		}
 	}
 
 	// Return result
 	return done;
+}
+
+// Clear resource
+void GenInput::clearResource(void){
+
+	// Switch
+	for(int i = 0; i < (int)switches.size(); i++)
+		switches[i].tcamUsage = TCAM_CAPACITY;
+	
+	// Link
+	for(int i = 0; i < (int)links.size(); i++)
+		links[i].linkCapacity = LINK_CAPACITY;
+	
+	// Transceiver node
+	for(int i = 0; i < (int)trancNode.size(); i++)
+		trancNode[i].nodeCapacity = LINK_CAPACITY;
+	
+	// Interference node
+	for(int i = 0; i < (int)interNode.size(); i++)
+		interNode[i].nodeCapacity = LINK_CAPACITY;
 }
 
 // Output flow
@@ -365,12 +452,15 @@ void GenInput::output(void){
 			// Traffic volume
 			printf("%.1lf\n", flows[flowID].pathFlow[pathID].traffic);
 
-			// For each hop
-			printf("%d\n", (int)flows[flowID].pathFlow[pathID].hop[0].size());
-			for(int hop = 0; hop < (int)flows[flowID].pathFlow[pathID].hop[0].size(); hop++){
-				printf("%d %d\n", flows[flowID].pathFlow[pathID].hop[0][hop].srcID, flows[flowID].pathFlow[pathID].hop[0][hop].dstID);
+			// Initial and final state
+			for(int state = 0; state < 2; state++){
+
+				// For each hop
+				printf("%d\n", (int)flows[flowID].pathFlow[pathID].hop[state].size());
+				for(int hop = 0; hop < (int)flows[flowID].pathFlow[pathID].hop[state].size(); hop++){
+					printf("%d %d\n", flows[flowID].pathFlow[pathID].hop[state][hop].srcID, flows[flowID].pathFlow[pathID].hop[state][hop].dstID);
+				}
 			}
-			printf("(final state here)\n");
 		}
 	}
 }
