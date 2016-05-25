@@ -19,8 +19,15 @@ int main(int argc, char *argv[])
 	numOfFlow = atoi(argv[1]);
 	numOfPod = atoi(argv[2]);
 	genInput.initialize(numOfFlow, numOfPod);
-	
 
-	fprintf(stderr, "DEBUG flag\n");
+	// Generate initial traffic distribution
+	genInput.genInitial();
+
+	// Generate initial traffic distribution
+	genInput.genFinal();
+
+	// Output
+	genInput.output();
+
 	return 0;
 }

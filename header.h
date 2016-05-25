@@ -6,6 +6,8 @@
 #include <ctime>
 #include <cmath>
 #include <vector>
+#include <queue>
+#include <map>
 using namespace std;
 
 // Parameters
