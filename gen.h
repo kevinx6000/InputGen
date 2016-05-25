@@ -9,6 +9,8 @@ class GenInput{
 
 	public:
 		void initialize(int, int);	// Initializer
+		void genInitial(void);		// Generate initial state
+		void genFinal(void);		// Generate final state
 
 	private:
 		int pod;					// Number of pod in Fattree

@@ -16,6 +16,16 @@ void GenInput::initialize(int n, int k){
 	this->numOfAggr = k*k/2;
 	this->numOfEdge = k*k/2;
 
-	// DEBUG
-	fprintf(stderr, "F = %d, P = %d, C = %d, A = %d, E = %d\n", numOfFlow, pod, numOfCore, numOfAggr, numOfEdge);
+	// Time seed
+	srand((unsigned)time(NULL));
+}
+
+// Generate initial state
+void GenInput::genInitial(void){
+	
+}
+
+// Generate final state
+void GenInput::genFinal(void){
+	
 }
