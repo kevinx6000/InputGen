@@ -158,7 +158,6 @@ void GenInput::initialize(int n, int k){
 void GenInput::genInitial(void){
 
 	// Variable
-	int srcID, dstID, linkID;
 	bool ok, isWireless;
 	Flow ftmp;
 	PathFlow ptmp;
@@ -193,26 +192,7 @@ void GenInput::genInitial(void){
 			if(findPath(ftmp.src, ptmp.dst[0], ptmp.hop[0], isWireless, ptmp.traffic)){
 				
 				// Update remaining capacity
-				for(int i = 0; i < (int)ptmp.hop[0].size(); i++){
-					srcID = ptmp.hop[0][i].srcID;
-					dstID = ptmp.hop[0][i].dstID;
-					linkID = linkMap[srcID][dstID];
-					links[linkID].linkCapacity -= ptmp.traffic;
-
-					// Wireless link
-					if(links[linkID].isWireless){
-
-						// Transceiver
-						trancNode[ switches[srcID].trancID ].nodeCapacity -= ptmp.traffic;
-						trancNode[ switches[dstID].trancID ].nodeCapacity -= ptmp.traffic;
-
-						// Interference
-						for(int j = 0; j < (int)links[linkID].iList.size(); j++){
-							srcID = links[linkID].iList[j];
-							interNode[ switches[srcID].interID ].nodeCapacity -= ptmp.traffic;
-						}
-					}
-				}
+				occupyRes(ptmp.hop[0], ptmp.traffic);
 
 				// Record
 				ftmp.pathFlow.push_back(ptmp);
@@ -221,7 +201,7 @@ void GenInput::genInitial(void){
 			// Not found
 			else{
 				ok = false;
-				fprintf(stderr, "INITIAL STATE NOT FOUND\n");
+				fprintf(stderr, "[Warning] Initial state not found, automatically retry.\n");
 			}
 		}
 
@@ -234,27 +214,35 @@ void GenInput::genInitial(void){
 void GenInput::genFinal(void){
 
 	// Variable
-	int srcID, dstID, dstID1, dstID2, linkID;
+	int srcID, dstID1, dstID2;
 	bool isWireless;
 	double traffic;
+	map<int, bool>mtmp;
+	vector< map<int, bool> >chosen;
 
 	// Clear resource
 	clearResource();
 
-	// For each flow
+	// Initialize map
+	mtmp.clear();
+	for(int flowID = 0; flowID < (int)flows.size(); flowID++)
+		chosen.push_back(mtmp);
+
+	// First: pick some flow as fixed (no change)
 	for(int flowID = 0; flowID < (int)flows.size(); flowID++){
-
-		// For each path flow
 		for(int pathID = 0; pathID < (int)flows[flowID].pathFlow.size(); pathID++){
+			if(rand()%2) continue;
+			chosen[flowID][pathID] = true;
+			traffic = flows[flowID].pathFlow[pathID].traffic;
+			flows[flowID].pathFlow[pathID].hop[1] = flows[flowID].pathFlow[pathID].hop[0];
+			occupyRes(flows[flowID].pathFlow[pathID].hop[1], traffic);
+		}
+	}
 
-			// Only some of path flows need change (50% now)
-			if(rand()%2){
-
-				// Final state remain the same as initial one
-				flows[flowID].pathFlow[pathID].hop[1] = flows[flowID].pathFlow[pathID].hop[0];
-				continue;
-			}
-
+	// Then: the ramaining ones are required to find new paths
+	for(int flowID = 0; flowID < (int)flows.size(); flowID++){
+		for(int pathID = 0; pathID < (int)flows[flowID].pathFlow.size(); pathID++){
+			if(chosen[flowID][pathID]) continue;
 			srcID = flows[flowID].src;
 			dstID1 = flows[flowID].pathFlow[pathID].dst[0];
 			traffic = flows[flowID].pathFlow[pathID].traffic;
@@ -271,32 +259,13 @@ void GenInput::genFinal(void){
 			if(findPath(srcID, dstID2, flows[flowID].pathFlow[pathID].hop[1], isWireless, traffic)){
 				
 				// Update remaining capacity
-				for(int i = 0; i < (int)flows[flowID].pathFlow[pathID].hop[1].size(); i++){
-					srcID = flows[flowID].pathFlow[pathID].hop[1][i].srcID;
-					dstID = flows[flowID].pathFlow[pathID].hop[1][i].dstID;
-					linkID = linkMap[srcID][dstID];
-					links[linkID].linkCapacity -= traffic;
-
-					// Wireless link
-					if(links[linkID].isWireless){
-
-						// Transceiver
-						trancNode[ switches[srcID].trancID ].nodeCapacity -= traffic;
-						trancNode[ switches[dstID].trancID ].nodeCapacity -= traffic;
-
-						// Interference
-						for(int j = 0; j < (int)links[linkID].iList.size(); j++){
-							srcID = links[linkID].iList[j];
-							interNode[ switches[srcID].interID ].nodeCapacity -= traffic;
-						}
-					}
-				}
+				occupyRes(flows[flowID].pathFlow[pathID].hop[1], traffic);
 			}
 
 			// Not found
 			else{
 				pathID--;
-				fprintf(stderr, "FINAL STATE NOT FOUND\n");
+				fprintf(stderr, "[Warning] Final state not found, automatically retry.\n");
 			}
 		}
 	}
@@ -429,6 +398,49 @@ void GenInput::clearResource(void){
 	// Interference node
 	for(int i = 0; i < (int)interNode.size(); i++)
 		interNode[i].nodeCapacity = LINK_CAPACITY;
+}
+
+// Occurpy resource
+void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
+
+	// Variable
+	int srcID, dstID, linkID;
+
+	// Update remaining capacity
+	for(int i = 0; i < (int)hopList.size(); i++){
+		srcID = hopList[i].srcID;
+		dstID = hopList[i].dstID;
+		linkID = linkMap[srcID][dstID];
+if(links[linkID].linkCapacity < traffic){
+	fprintf(stderr, "[Error] No enough resource ");
+	if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
+	else fprintf(stderr, "(wired link).\n");
+	exit(1);
+}
+		links[linkID].linkCapacity -= traffic;
+
+		// Wireless link
+		if(links[linkID].isWireless){
+
+			// Transceiver
+if(trancNode[ switches[srcID].trancID ].nodeCapacity < traffic || trancNode[ switches[dstID].trancID ].nodeCapacity < traffic){
+	fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+	exit(1);
+}
+			trancNode[ switches[srcID].trancID ].nodeCapacity -= traffic;
+			trancNode[ switches[dstID].trancID ].nodeCapacity -= traffic;
+
+			// Interference
+			for(int j = 0; j < (int)links[linkID].iList.size(); j++){
+				srcID = links[linkID].iList[j];
+if(interNode[ switches[srcID].trancID ].nodeCapacity < traffic){
+	fprintf(stderr, "[Error] No enough resource (interference node).\n");
+	exit(1);
+}
+				interNode[ switches[srcID].interID ].nodeCapacity -= traffic;
+			}
+		}
+	}
 }
 
 // Output flow

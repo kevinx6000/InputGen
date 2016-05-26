@@ -78,6 +78,7 @@ class GenInput{
 	/* Private Function */
 	private:
 		void clearResource(void);
+		void occupyRes(const vector<Hop>&, double);
 		bool findPath(int, int, vector<Hop>&, bool, double);
 		double vecdot(double[2], double[2], double[2], double[2]);
 		double vecdis(double[2], double[2], double[2], double[2]);
