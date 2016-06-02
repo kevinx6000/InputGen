@@ -9,7 +9,7 @@ class GenInput{
 
 	/* Public Functions */
 	public:
-		void initialize(int, int);	// Initializer
+		void initialize(int);		// Initializer
 		void genInitial(void);		// Generate initial state
 		void genFinal(void);		// Generate final state
 		void output(void);			// Output flow
@@ -23,7 +23,6 @@ class GenInput{
 		};
 		class PathFlow{
 			public:
-				int dst[2];
 				double traffic;
 				vector<Hop>hop[2];
 		};
@@ -55,38 +54,42 @@ class GenInput{
 				int ID;
 				double nodeCapacity;
 		};
-		class SearchNode{
+		class CycleRes{
 			public:
-				int ID; 
-				map<int, double>interCap;
+				int rID;
+				int maxFlowID;
+				int maxPathID;
+				double maxRate;
+				vector<int>flowID;
+				vector<int>pathID;
 		};
 
 	/* Private Data */
 	private:
 		int pod;						// Number of pod in Fattree
-		int numOfFlow;					// Number of flows
 		int numOfCore;					// Number of core switches
 		int numOfAggr;					// Number of aggregate switches
 		int numOfEdge;					// Number of edge switches
+		CycleRes cycleRes[2];
 		vector<Flow>flows;				// Flow plan to output
 		vector<Switch>switches;			// Switch info
 		vector<Link>links;				// Link info
 		vector<NodeCap>trancNode;		// Transceiver node info
 		vector<NodeCap>interNode;		// Interference node info
 		vector< map<int, int> >linkMap;	// Map the index from (src,dst) to link resource ID
-		vector<Link>initLink;			// (initial) Link info
-		vector<NodeCap>initTranc;		// (initial) Transceiver node info
-		vector<NodeCap>initInter;		// (initial) Interference node info
 
 	/* Private Function */
 	private:
 		void clearResource(void);
 		void occupyRes(const vector<Hop>&, double);
-		bool findPath(int, int, vector<Hop>&, bool, double);
-		bool chainPath(int, int, vector<Hop>&, bool, double);
+		void genRandList(vector<int>&, int);
+		bool findWiredPath(vector<Hop>&, double, int, int, int);
+		bool findWiredPath(vector<Hop>&, double, int, int, int, int);
+		bool findAnotherPath(vector<Hop>&, double, int);
 		double genTraffic(void);
 		double vecdot(double[2], double[2], double[2], double[2]);
 		double vecdis(double[2], double[2], double[2], double[2]);
+		bool testPort(int, int);
 };
 
 #endif
