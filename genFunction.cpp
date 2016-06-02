@@ -179,14 +179,9 @@ void GenInput::genInitial(void){
 			while((ptmp.dst[0] = rand()%numOfEdge + numOfCore + numOfAggr) == ftmp.src);
 
 			// Wired/wireless path
-			if(rand()%2){
-				isWireless = true;
-				ptmp.traffic = rand()%(LINK_CAPACITY/2)+1;
-			}
-			else{
-				isWireless = false;
-				ptmp.traffic = rand()%LINK_CAPACITY+1;
-			}
+			if(rand()%2) isWireless = true;
+			else isWireless = false;
+			ptmp.traffic = genTraffic();
 
 			// Shortest path
 			if(findPath(ftmp.src, ptmp.dst[0], ptmp.hop[0], isWireless, ptmp.traffic)){
@@ -208,14 +203,18 @@ void GenInput::genInitial(void){
 		// Record
 		flows.push_back(ftmp);
 	}
+
+	// Copy initial resource
+	initLink = links;
+	initTranc = trancNode;
+	initInter = interNode;
 }
 
 // Generate final state
 void GenInput::genFinal(void){
 
 	// Variable
-	int srcID, dstID1, dstID2;
-	bool isWireless;
+	int srcID, dstID1;
 	double traffic;
 	map<int, bool>mtmp;
 	vector< map<int, bool> >chosen;
@@ -247,22 +246,15 @@ void GenInput::genFinal(void){
 			dstID1 = flows[flowID].pathFlow[pathID].dst[0];
 			traffic = flows[flowID].pathFlow[pathID].traffic;
 
-			// Randomly pick a destination other than src and dst[0]
-			while((dstID2 = rand()%numOfEdge + numOfCore + numOfAggr) == srcID || dstID2 == dstID1);
-			flows[flowID].pathFlow[pathID].dst[1] = dstID2;
+			// TODO: pick up some initial resource, and find out final path which uses that resource
 			
-			// Wired/wirless path
-			if(rand()%2) isWireless = true;
-			else isWireless = false;
+			// DEBUG: wired path
+			if(chainPath(srcID, dstID1, flows[flowID].pathFlow[pathID].hop[1], false, traffic)){
 
-			// Shortest path
-			if(findPath(srcID, dstID2, flows[flowID].pathFlow[pathID].hop[1], isWireless, traffic)){
-				
 				// Update remaining capacity
 				occupyRes(flows[flowID].pathFlow[pathID].hop[1], traffic);
+				fprintf(stderr, "[Info] Final state found, and resource is updated.\n");
 			}
-
-			// Not found
 			else{
 				pathID--;
 				fprintf(stderr, "[Warning] Final state not found, automatically retry.\n");
@@ -443,6 +435,153 @@ if(interNode[ switches[srcID].trancID ].nodeCapacity < traffic){
 	}
 }
 
+// Generate chain path
+bool GenInput::chainPath(int srcID, int orgID, vector<Hop>& hopList, bool isWireless, double traffic){
+
+	// Variable
+	int nowID, nxtID, dstID, linkID, shID, srID;
+	bool found;
+	Hop htmp;
+
+	// Initialize
+	hopList.clear();
+
+	// Wireless paths
+	if(isWireless){
+	}
+
+	// Wired paths
+	else{
+
+		// Pick up an destination other than initial destination
+		while((dstID = rand()%numOfEdge + numOfCore + numOfAggr) == orgID || dstID == srcID);
+		srID = srcID - numOfCore - numOfAggr;
+		shID = dstID - numOfCore - numOfAggr;
+
+		// Edge -> Aggr
+		nowID = srcID;
+		found = false;
+		for(int i = 0; i < pod/2; i++){
+			nxtID = numOfCore + (srID/(pod/2))*(pod/2) + i;
+			linkID = linkMap[nowID][nxtID];
+
+			// Enough traffic
+			if(links[linkID].linkCapacity < traffic) continue;
+
+			// Chaining
+			if(initLink[linkID].linkCapacity < traffic){
+				found = true;
+				htmp.srcID = nowID;
+				htmp.dstID = nxtID;
+				hopList.push_back(htmp);
+				fprintf(stderr, "[Info] Congrats, chain created.\n");
+				break;
+			}
+		}
+		// Not found: randomly pick one aggregate switch (in the same pod)
+		while(!found){
+			nxtID = numOfCore + (srID/(pod/2))*(pod/2) + rand()%(pod/2);
+			linkID = linkMap[nowID][nxtID];
+			if(links[linkID].linkCapacity >= traffic){
+				htmp.srcID = nowID;
+				htmp.dstID = nxtID;
+				hopList.push_back(htmp);
+				found = true;
+			}
+		}
+		nowID = nxtID;
+		
+		// Different pod
+		if(shID/(pod/2) != srID/(pod/2)){
+
+			// Aggr -> Core
+			found = false;
+			for(int i = 0; i < pod/2; i++){
+				nxtID = ((nowID-numOfCore)%(pod/2))*(pod/2) + i;
+				linkID = linkMap[nowID][nxtID];
+
+				// Enough traffic
+				if(links[linkID].linkCapacity < traffic) continue;
+
+				// Chaining
+				if(initLink[linkID].linkCapacity < traffic){
+					found = true;
+					htmp.srcID = nowID;
+					htmp.dstID = nxtID;
+					hopList.push_back(htmp);
+					fprintf(stderr, "[Info] Congrats, chain created.\n");
+					break;
+				}
+			}
+			// Not found: randomly pick one aggregate switch
+			while(!found){
+				nxtID = ((nowID-numOfCore)%(pod/2))*(pod/2) + rand()%(pod/2);
+				linkID = linkMap[nowID][nxtID];
+				if(links[linkID].linkCapacity >= traffic){
+					htmp.srcID = nowID;
+					htmp.dstID = nxtID;
+					hopList.push_back(htmp);
+					found = true;
+				}
+			}
+			nowID = nxtID;
+
+			// Core -> Aggr (FIX PATH)
+			nxtID = nowID/(pod/2) + (shID/(pod/2))*(pod/2) + numOfCore;
+			linkID = linkMap[nowID][nxtID];
+			if(links[linkID].linkCapacity < traffic){
+				fprintf(stderr, "[Warning] Not enought resource: Core > Aggr (has = %.2lf, need = %.2lf)\n", links[linkID].linkCapacity, traffic);
+				return false;
+			}
+			if(initLink[linkID].linkCapacity < traffic)
+				fprintf(stderr, "[Info] Congrats, chain created.\n");
+			htmp.srcID = nowID;
+			htmp.dstID = nxtID;
+			hopList.push_back(htmp);
+			nowID = nxtID;
+		}
+
+		// Aggr -> Edge (FIX PATH)
+		nxtID = dstID;
+		linkID = linkMap[nowID][nxtID];
+		if(links[linkID].linkCapacity < traffic){
+			fprintf(stderr, "[Warning] Not enought resource: Aggr > Edge (has = %.2lf, need = %.2lf)\n", links[linkID].linkCapacity, traffic);
+			return false;
+		}
+		if(initLink[linkID].linkCapacity < traffic)
+			fprintf(stderr, "[Info] Congrats, chain created.\n");
+		htmp.srcID = nowID;
+		htmp.dstID = nxtID;
+		hopList.push_back(htmp);
+	}
+	return true;
+}
+
+// Generate traffic according to some distribution
+double GenInput::genTraffic(void){
+
+	// Traffic distribution
+	double T[11] = {
+		0.0001,
+		0.000805842,
+		0.002053525,
+		0.004097321,
+		0.008116616,
+		0.019109530,
+		0.062643354,
+		0.273841963,
+		1.0,
+		6.493816315,
+		133.352143216
+	};
+
+	// Randomly pick one interval
+	int intval = rand()%10;
+
+	// Randomly pick with uniform distribution in the picked interval
+	return T[intval] + ( (T[intval+1] - T[intval]) * (rand()%100) ) / 100;
+}
+
 // Output flow
 void GenInput::output(void){
 
@@ -462,7 +601,7 @@ void GenInput::output(void){
 		for(int pathID = 0; pathID < (int)flows[flowID].pathFlow.size(); pathID++){
 
 			// Traffic volume
-			printf("%.1lf\n", flows[flowID].pathFlow[pathID].traffic);
+			printf("%.10lf\n", flows[flowID].pathFlow[pathID].traffic);
 
 			// Initial and final state
 			for(int state = 0; state < 2; state++){

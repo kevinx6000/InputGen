@@ -74,12 +74,17 @@ class GenInput{
 		vector<NodeCap>trancNode;		// Transceiver node info
 		vector<NodeCap>interNode;		// Interference node info
 		vector< map<int, int> >linkMap;	// Map the index from (src,dst) to link resource ID
+		vector<Link>initLink;			// (initial) Link info
+		vector<NodeCap>initTranc;		// (initial) Transceiver node info
+		vector<NodeCap>initInter;		// (initial) Interference node info
 
 	/* Private Function */
 	private:
 		void clearResource(void);
 		void occupyRes(const vector<Hop>&, double);
 		bool findPath(int, int, vector<Hop>&, bool, double);
+		bool chainPath(int, int, vector<Hop>&, bool, double);
+		double genTraffic(void);
 		double vecdot(double[2], double[2], double[2], double[2]);
 		double vecdis(double[2], double[2], double[2], double[2]);
 };
