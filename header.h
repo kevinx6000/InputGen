@@ -18,5 +18,6 @@ using namespace std;
 // Macro
 #define dis(x1,y1,x2,y2) sqrt(((x1)-(x2))*((x1)-(x2)) + ((y1)-(y2))*((y1)-(y2)))
 #define myAbs(x) ((x)>0?(x):(-(x)))
+#define myMax(a,b) ((a)>(b)?(a):(b))
 
 #endif

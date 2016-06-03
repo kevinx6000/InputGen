@@ -148,7 +148,7 @@ void GenInput::initialize(int k){
 	flows.clear();
 
 	// Time seed
-	srand((unsigned)time(NULL));
+	srand((unsigned)clock());
 }
 
 // Generate initial state
@@ -200,7 +200,9 @@ void GenInput::genInitial(void){
 			ptmp.traffic = genTraffic();
 
 			// Pass through aggr->core
-			if(findWiredPath(ptmp.hop[0], ptmp.traffic, podID, coreID[i], aggrID[i])){
+			if(links[linkMap[ aggrID[i] ][ coreID[i] ]].linkCapacity - ptmp.traffic + myMax(ptmp.traffic, cycleRes[i].maxRate) >= cycleRes[(i+1)%2].maxRate
+			&& links[linkMap[ aggrID[(i+1)%2] ][ coreID[(i+1)%2] ]].linkCapacity + cycleRes[(i+1)%2].maxRate >= ptmp.traffic
+			&& findWiredPath(ptmp.hop[0], ptmp.traffic, podID, coreID[i], aggrID[i])){
 				fprintf(stderr, "[Info] Compete flow path OK.\n");
 				
 				// Occupy the resource along the path
@@ -228,8 +230,15 @@ void GenInput::genInitial(void){
 
 				// Randomly pick another wired(?) paths,
 				// which does not pass through current pod
-				while(!findAnotherPath(ptmp.hop[0], ptmp.traffic, podID))
-					fprintf(stderr, "[Info] Another path not found, retry...\n");
+				int retry = 0;
+				while(!findAnotherPath(ptmp.hop[0], ptmp.traffic, podID)){
+					fprintf(stderr, "[Info] Another path not found, retry... (flow = %d)\n", (int)flows.size());
+					retry ++;
+					if(retry > 10){
+						fprintf(stderr, "[Error] Solution not found, GG.\n");
+						exit(1);
+					}
+				}
 
 				// Occupy the resource along the path
 				occupyRes(ptmp.hop[0], ptmp.traffic);
@@ -413,7 +422,12 @@ bool GenInput::findWiredPath(vector<Hop>& hopList, double traffic, int podID, in
 		if(links[linkID].linkCapacity >= traffic) break;
 	}
 	if(i == pod/2){
-		fprintf(stderr, "[Info] Edge -> Aggr failed.\n");
+		fprintf(stderr, "[Info] Edge -> Aggr failed. (all full QQ)\n");
+		for(i = 0; i < pod/2; i++){
+			edgeID = numOfCore + numOfAggr + podID*(pod/2) + randList[i];
+			linkID = linkMap[edgeID][aggrID];
+			fprintf(stderr, "[Info] Edge %d -> Aggr %d = %.2lf (need %.2lf)\n", edgeID, aggrID, links[linkID].linkCapacity, traffic);
+		}
 		return false;
 	}
 	return findWiredPath(hopList, traffic, podID, coreID, aggrID, edgeID);
@@ -432,7 +446,7 @@ bool GenInput::findWiredPath(vector<Hop>& hopList, double traffic, int podID, in
 	ansTemp.clear();
 
 	// Edge -> Aggr
-	linkID = linkMap[edgeID][coreID];
+	linkID = linkMap[edgeID][aggrID];
 	if(links[linkID].linkCapacity < traffic) return false;
 	htmp.srcID = edgeID;
 	htmp.dstID = aggrID;
@@ -440,7 +454,10 @@ bool GenInput::findWiredPath(vector<Hop>& hopList, double traffic, int podID, in
 
 	// Aggr -> Core
 	linkID = linkMap[aggrID][coreID];
-	if(links[linkID].linkCapacity < traffic) return false;
+	if(links[linkID].linkCapacity < traffic){
+		fprintf(stderr, "[Info] Aggr -> Core failed.\n");
+		return false;
+	}
 	htmp.srcID = aggrID;
 	htmp.dstID = coreID;
 	ansTemp.push_back(htmp);
@@ -508,7 +525,10 @@ bool GenInput::findAnotherPath(vector<Hop>& hopList, double traffic, int podID){
 			break;
 		}
 	}
-	if(i == pod) return false;
+	if(i == pod){
+		fprintf(stderr, "[Info] I think this is impossible...\n");
+		return false;
+	}
 
 	// Decide aggr -> core
 	genRandList(randList, pod/2);
@@ -519,6 +539,7 @@ bool GenInput::findAnotherPath(vector<Hop>& hopList, double traffic, int podID){
 			if(findWiredPath(hopList, traffic, podID2, coreID, aggrID)) return true;
 		}
 	}
+	fprintf(stderr, "[Info] All path for pod = %d is full\n", podID2);
 	return false;
 }
 
