@@ -9,7 +9,7 @@ class GenInput{
 
 	/* Public Functions */
 	public:
-		void initialize(int);		// Initializer
+		void initialize(int, int);	// Initializer
 		void genInitial(void);		// Generate initial state
 		void genFinal(void);		// Generate final state
 		void output(void);			// Output flow
@@ -63,10 +63,17 @@ class GenInput{
 				vector<int>flowID;
 				vector<int>pathID;
 		};
+		class BFSNode{
+			public:
+				int ID;
+				vector<Hop>hopList;
+				vector<NodeCap>inter;
+		};
 
 	/* Private Data */
 	private:
 		int pod;						// Number of pod in Fattree
+		int numOfFlow;					// Number of flows
 		int numOfCore;					// Number of core switches
 		int numOfAggr;					// Number of aggregate switches
 		int numOfEdge;					// Number of edge switches
@@ -83,6 +90,9 @@ class GenInput{
 		void clearResource(void);
 		void occupyRes(const vector<Hop>&, double);
 		void genRandList(vector<int>&, int);
+		bool findPath(vector<Hop>&, double, bool, int, int);	// Not this destination
+
+
 		bool findWiredPath(vector<Hop>&, double, int, int, int);
 		bool findWiredPath(vector<Hop>&, double, int, int, int, int);
 		bool findAnotherPath(vector<Hop>&, double, int);
