@@ -321,7 +321,7 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 			// Interference
 			for(int j = 0; j < (int)links[linkID].iList.size(); j++){
 				srcID = links[linkID].iList[j];
-				if(interNode[ switches[srcID].trancID ].nodeCapacity < traffic){
+				if(interNode[ switches[srcID].interID ].nodeCapacity < traffic){
 					fprintf(stderr, "[Error] No enough resource (interference node).\n");
 					exit(1);
 				}
