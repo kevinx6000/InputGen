@@ -5,31 +5,23 @@
 int main(int argc, char *argv[])
 {
 	// Exception
-	if(argc != 3){
-		fprintf(stderr, "Usage: ./main [pod] [# of flows]\n");
+	if(argc != 2){
+		fprintf(stderr, "Usage: ./main [pod]\n");
 		exit(1);
 	}
 
 	// Variables
-	int numOfPod, numOfFlow;
+	int numOfPod;
 	GenInput genInput;
 
 	// Initialize
 	fprintf(stderr, "[Info] Initializing environment and variables...\n");
 	numOfPod = atoi(argv[1]);
-	numOfFlow = atoi(argv[2]);
-	genInput.initialize(numOfPod, numOfFlow);
-	fprintf(stderr, "[Info] done.\n");
-
-	// Generate initial traffic distribution
-	fprintf(stderr, "[Info] Generating intial traffic distribution...\n");
-	genInput.genInitial();
+	genInput.initialize(numOfPod);
 	fprintf(stderr, "[Info] done.\n");
 	
-	// Generate final traffic distribution
-	fprintf(stderr, "[Info] Generating final traffic distribution...\n");
-	genInput.genFinal();
-	fprintf(stderr, "[Info] done.\n");
+	// Generate input
+	genInput.genInput();
 
 	// Output
 	fprintf(stderr, "[Info] Output resulting flow plans...\n");

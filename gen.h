@@ -9,9 +9,8 @@ class GenInput{
 
 	/* Public Functions */
 	public:
-		void initialize(int, int);	// Initializer
-		void genInitial(void);		// Generate initial state
-		void genFinal(void);		// Generate final state
+		void initialize(int);		// Initializer
+		void genInput(void);		// Generate input
 		void output(void);			// Output flow
 
 	/* Private Class */
@@ -54,20 +53,18 @@ class GenInput{
 				int ID;
 				double nodeCapacity;
 		};
-		class CycleRes{
-			public:
-				int rID;
-				int maxFlowID;
-				int maxPathID;
-				double maxRate;
-				vector<int>flowID;
-				vector<int>pathID;
-		};
 		class BFSNode{
 			public:
 				int ID;
 				vector<Hop>hopList;
 				vector<NodeCap>inter;
+		};
+		class CycleRes{
+			public:
+				vector<Switch>switches;
+				vector<Link>links;
+				vector<NodeCap>trancNode;
+				vector<NodeCap>interNode;
 		};
 
 	/* Private Data */
@@ -77,7 +74,6 @@ class GenInput{
 		int numOfCore;					// Number of core switches
 		int numOfAggr;					// Number of aggregate switches
 		int numOfEdge;					// Number of edge switches
-		CycleRes cycleRes[2];
 		vector<Flow>flows;				// Flow plan to output
 		vector<Switch>switches;			// Switch info
 		vector<Link>links;				// Link info
@@ -87,15 +83,13 @@ class GenInput{
 
 	/* Private Function */
 	private:
+		bool genInitial(const CycleRes&, double, Flow&);		// Generate initial state
+		bool genFinal(const CycleRes&, double, Flow&);		// Generate final state
+		bool findPath(vector<Hop>&, double, bool, int, int, const CycleRes&);	// Not this destination
+		bool enoughRes(const vector<Hop>&, double, const CycleRes&);
+		void occupyRes(const vector<Hop>&, double, CycleRes&);
 		void clearResource(void);
-		void occupyRes(const vector<Hop>&, double);
 		void genRandList(vector<int>&, int);
-		bool findPath(vector<Hop>&, double, bool, int, int);	// Not this destination
-
-
-		bool findWiredPath(vector<Hop>&, double, int, int, int);
-		bool findWiredPath(vector<Hop>&, double, int, int, int, int);
-		bool findAnotherPath(vector<Hop>&, double, int);
 		double genTraffic(void);
 		double vecdot(double[2], double[2], double[2], double[2]);
 		double vecdis(double[2], double[2], double[2], double[2]);

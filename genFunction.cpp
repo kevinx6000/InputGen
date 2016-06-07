@@ -3,7 +3,7 @@
 #include "gen.h"
 
 // Initializer
-void GenInput::initialize(int k, int numOfFlow){
+void GenInput::initialize(int k){
 
 	// Variable
 	int totalSwitch;
@@ -145,219 +145,159 @@ void GenInput::initialize(int k, int numOfFlow){
 		interNode.push_back(ntmp);
 	}
 
-	// Clear flows
-	flows.clear();
-
 	// Time seed
 	srand((unsigned)clock());
 }
 
-// Generate initial state
-void GenInput::genInitial(void){
+// Generate input
+void GenInput::genInput(void){
 
 	// Variable
-	int tryCnt;
-	int srcID, dstID;
-	bool found, isWireless;
+	bool hasCycle;
 	double traffic;
 	Flow ftmp;
-	PathFlow ptmp;
-	vector<int>randList;
+	CycleRes cycleRes[2];
 
-	// Clear resource
+	// Clear flows
+	flows.clear();
+
+	// Clear resource and copy
 	clearResource();
+	for(int i = 0; i < 2; i++){
+		cycleRes[i].switches = switches;
+		cycleRes[i].links = links;
+		cycleRes[i].trancNode = trancNode;
+		cycleRes[i].interNode = interNode;
+	}
 
-	// Generate flows
-	for(int flowID = 0; flowID < numOfFlow; flowID++){
+	// Until cycle found
+	hasCycle = false;
+	while(!hasCycle){
 
-		// Source/Traffic
-		srcID = numOfCore + numOfAggr + rand()%numOfEdge;
+		// DEBUG
+		fprintf(stderr, "[Info] Current flows = %d\n", (int)flows.size());
+
+		// Generate traffic
 		traffic = genTraffic();
 
-		// Pick random destination until found
-		found = false;
-		genRandList(randList, numOfEdge);
-		for(int i = 0; i < numOfEdge; i++){
-			dstID = numOfCore + numOfAggr + randList[i];
+		// Generate initial state
+		if(!genInitial(cycleRes[0], traffic, ftmp)){
+			fprintf(stderr, "[Warning] All s-t pair tried, initial path not found due to congested links.\n");
+			break;
+		}
+
+		// Generate final state
+		if(!genFinal(cycleRes[1], traffic, ftmp)){
+			fprintf(stderr, "[Warning] All s-t pair tried, final path not found due to congested links.\n");
+			break;
+		}
+
+		// Occupy Resource
+		occupyRes(ftmp.pathFlow[0].hop[0], traffic, cycleRes[0]);
+		occupyRes(ftmp.pathFlow[0].hop[1], traffic, cycleRes[1]);
+
+		// Record flow
+		flows.push_back(ftmp);
+
+		// Record require/release list
+
+		// Check cycle
+	}
+
+	// Result
+	if(hasCycle) fprintf(stderr, "[Info] Cycle found.\n");
+	else fprintf(stderr, "[Info] Cycle not found.\n");
+}
+
+// Generate initial state
+bool GenInput::genInitial(const CycleRes& curRes, double traffic, Flow& curFlow){
+
+	// Variable
+	int srcID, dstID;
+	bool found, isWireless;
+	PathFlow ptmp;
+	vector<int>randSrc;
+	vector<int>randDst;
+
+	// Random source
+	found = false;
+	genRandList(randSrc, numOfEdge);
+	for(int i = 0; i < numOfEdge; i++){
+		srcID = numOfCore + numOfAggr + randSrc[i];
+
+		// Random destination
+		genRandList(randDst, numOfEdge);
+		for(int j = 0; j < numOfEdge; j++){
+			dstID = numOfCore + numOfAggr + randDst[j];
 			if(srcID != dstID){
+
+				// Try to find out path
 				isWireless = (rand()%2 == 1);
-				tryCnt = 0;
-				while(tryCnt < 10 && !findPath(ptmp.hop[0], traffic, isWireless, srcID, dstID))
-					tryCnt++;
-				if(tryCnt < 10){
+				if(findPath(ptmp.hop[0], traffic, isWireless, srcID, dstID, curRes)){
+
+					// Mark as found
 					found = true;
 					break;
 				}
 			}
 		}
-		if(!found){
-			fprintf(stderr, "[Error] Cannot found path for all destination from %d\n", srcID);
-			exit(1);
-		}
+		if(found) break;
+	}
 
-		// Occupy resource
-		occupyRes(ptmp.hop[0], traffic);
+	// Path found
+	if(found){
 
 		// Record to flow list
-		ftmp.src = srcID;
 		ptmp.traffic = traffic;
-		ftmp.pathFlow.clear();
-		ftmp.pathFlow.push_back(ptmp);
-		flows.push_back(ftmp);
+		curFlow.src = srcID;
+		curFlow.pathFlow.clear();
+		curFlow.pathFlow.push_back(ptmp);
 	}
+	return found;
 }
 
 // Generate final state
-void GenInput::genFinal(void){
+bool GenInput::genFinal(const CycleRes& curRes, double traffic, Flow& curFlow){
 
-	// Variables
-	int tryCnt;
+	// Variable
 	int srcID, dstID, newID;
 	bool found, isWireless;
-	double traffic;
-	vector<int>randList;
-	map<int, bool>picked;
+	vector<int>randDst;
 
-	// Clear resource
-	clearResource();
+	// Initialize
+	found = false;
 
-	// Pick up some flow, set final as initial
-	picked.clear();
-	for(int flowID = 0; flowID < (int)flows.size(); flowID++){
-		if(rand()%2) continue;
-		srcID = flows[flowID].src;
-		dstID = flows[flowID].pathFlow[0].hop[0][ flows[flowID].pathFlow[0].hop[0].size()-1 ].dstID;
-		traffic = flows[flowID].pathFlow[0].traffic;
-		flows[flowID].pathFlow[0].hop[1] = flows[flowID].pathFlow[0].hop[0];
-		picked[flowID] = true;
-
-		// Occupy resource
-		occupyRes(flows[flowID].pathFlow[0].hop[1], traffic);
+	// Some flows remain the same as initial (must have enough final resource)
+	if(rand()%2 && enoughRes(curFlow.pathFlow[0].hop[0], traffic, curRes)){
+		found = true;
+		curFlow.pathFlow[0].hop[1] = curFlow.pathFlow[0].hop[0];
 	}
 
-	// For each initial flow
-	for(int flowID = 0; flowID < (int)flows.size(); flowID++){
-		if(picked[flowID]) continue;
-		srcID = flows[flowID].src;
-		dstID = flows[flowID].pathFlow[0].hop[0][ flows[flowID].pathFlow[0].hop[0].size()-1 ].dstID;
-		traffic = flows[flowID].pathFlow[0].traffic;
+	// Some flows are required to pick new final paths
+	else{
+		srcID = curFlow.src;
+		dstID = curFlow.pathFlow[0].hop[0][ curFlow.pathFlow[0].hop[0].size()-1 ].dstID;
 
 		// Pick up a random destination other than original one
-		found = false;
-		genRandList(randList, numOfEdge);
+		genRandList(randDst, numOfEdge);
 		for(int i = 0; i < numOfEdge; i++){
-			newID = numOfCore + numOfAggr + randList[i];
+			newID = numOfCore + numOfAggr + randDst[i];
 			if(newID != srcID && newID != dstID){
+
+				// Try to find out path
 				isWireless = (rand()%2 == 1);
-				tryCnt = 0;
-				while(tryCnt < 10 && !findPath(flows[flowID].pathFlow[0].hop[1], traffic, isWireless, srcID, newID))
-					tryCnt++;
-				if(tryCnt < 10){
+				if(findPath(curFlow.pathFlow[0].hop[1], traffic, isWireless, srcID, newID, curRes)){
 					found = true;
 					break;
 				}
 			}
 		}
-		if(!found){
-			fprintf(stderr, "[Error] Cannot found path for all destination from %d\n", srcID);
-			exit(1);
-		}
-
-		// Occupy resource
-		occupyRes(flows[flowID].pathFlow[0].hop[1], traffic);
 	}
-}
-
-// Clear resource
-void GenInput::clearResource(void){
-
-	// Switch
-	for(int i = 0; i < (int)switches.size(); i++)
-		switches[i].tcamUsage = TCAM_CAPACITY;
-	
-	// Link
-	for(int i = 0; i < (int)links.size(); i++)
-		links[i].linkCapacity = LINK_CAPACITY;
-	
-	// Transceiver node
-	for(int i = 0; i < (int)trancNode.size(); i++)
-		trancNode[i].nodeCapacity = LINK_CAPACITY;
-	
-	// Interference node
-	for(int i = 0; i < (int)interNode.size(); i++)
-		interNode[i].nodeCapacity = LINK_CAPACITY;
-}
-
-// Occurpy resource
-void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
-
-	// Variable
-	int srcID, dstID, linkID;
-
-	// Update remaining capacity
-	for(int i = 0; i < (int)hopList.size(); i++){
-		srcID = hopList[i].srcID;
-		dstID = hopList[i].dstID;
-		linkID = linkMap[srcID][dstID];
-		if(links[linkID].linkCapacity < traffic){
-			fprintf(stderr, "[Error] No enough resource [%d] = %.2lf < %.2lf", linkID, links[linkID].linkCapacity, traffic);
-			if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
-			else fprintf(stderr, "(wired link).\n");
-			exit(1);
-		}
-		links[linkID].linkCapacity -= traffic;
-
-		// Wireless link
-		if(links[linkID].isWireless){
-
-			// Transceiver
-			if(trancNode[ switches[srcID].trancID ].nodeCapacity < traffic || trancNode[ switches[dstID].trancID ].nodeCapacity < traffic){
-				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
-				exit(1);
-			}
-			trancNode[ switches[srcID].trancID ].nodeCapacity -= traffic;
-			trancNode[ switches[dstID].trancID ].nodeCapacity -= traffic;
-
-			// Interference
-			for(int j = 0; j < (int)links[linkID].iList.size(); j++){
-				srcID = links[linkID].iList[j];
-				if(interNode[ switches[srcID].trancID ].nodeCapacity < traffic){
-					fprintf(stderr, "[Error] No enough resource (interference node).\n");
-					exit(1);
-				}
-				interNode[ switches[srcID].interID ].nodeCapacity -= traffic;
-			}
-		}
-	}
-}
-
-// Generate traffic according to some distribution
-double GenInput::genTraffic(void){
-
-	// Traffic distribution
-	double T[11] = {
-		0.0001,
-		0.000805842,
-		0.002053525,
-		0.004097321,
-		0.008116616,
-		0.019109530,
-		0.062643354,
-		0.273841963,
-		1.0,
-		6.493816315,
-		133.352143216
-	};
-
-	// Randomly pick one interval
-	int intval = rand()%10;
-
-	// Randomly pick with uniform distribution in the picked interval
-	return T[intval] + ( (T[intval+1] - T[intval]) * (rand()%100) ) / 100;
+	return found;
 }
 
 // Find path from source to destination using traffic with wired/wireless path
-bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, int srcID, int dstID){
+bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, int srcID, int dstID, const CycleRes& curRes){
 
 	// Variables
 	int pod1, pod2;
@@ -382,14 +322,14 @@ bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, i
 	if(isWireless){
 
 		// Copy resource
-		copyLink = links;
-		copyTranc = trancNode;
+		copyLink = curRes.links;
+		copyTranc = curRes.trancNode;
 
 		// BFS
 		found = false;
 		Bnow.ID = srcID;
 		Bnow.hopList.clear();
-		Bnow.inter = interNode;
+		Bnow.inter = curRes.interNode;
 		vis.clear();
 		vis[srcID] = true;
 		que.push(Bnow);
@@ -399,43 +339,40 @@ bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, i
 			nowID = Bnow.ID;
 
 			// Transceiver node
-			if(copyTranc[ switches[nowID].trancID ].nodeCapacity < traffic) continue;
-			copyTranc[ switches[nowID].trancID ].nodeCapacity -= traffic;
+			if(copyTranc[ curRes.switches[nowID].trancID ].nodeCapacity < traffic) continue;
+			copyTranc[ curRes.switches[nowID].trancID ].nodeCapacity -= traffic;
 
 			// Neighbor
-			for(int i = 0; i < (int)switches[nowID].port.size(); i++){
-				nxtID = switches[nowID].port[i];
+			for(int i = 0; i < (int)curRes.switches[nowID].port.size(); i++){
+				nxtID = curRes.switches[nowID].port[i];
 				linkID = linkMap[nowID][nxtID];
-				if(!links[linkID].isWireless) continue;
+				if(!curRes.links[linkID].isWireless) continue;
 
 				// Check feasibility
 				if(!vis[nxtID]){
 
 					// Transceiver node
-					if(copyTranc[ switches[nxtID].trancID ].nodeCapacity < traffic) continue;
+					if(copyTranc[ curRes.switches[nxtID].trancID ].nodeCapacity < traffic) continue;
 
-					// Interference
+					// Interference node
 					ok = true;
-					for(int j = 0; j < (int)links[linkID].iList.size(); j++){
-						interID = links[linkID].iList[j];
-						if(Bnow.inter[ switches[interID].interID ].nodeCapacity < traffic){
+					Bnxt = Bnow;
+					Bnxt.ID = nxtID;
+					for(int j = 0; j < (int)curRes.links[linkID].iList.size(); j++){
+						interID = curRes.links[linkID].iList[j];
+						if(Bnxt.inter[ curRes.switches[interID].interID ].nodeCapacity < traffic){
 							ok = false;
 							break;
 						}
+						Bnxt.inter[ curRes.switches[interID].interID ].nodeCapacity -= traffic;
 					}
 
 					// OK
 					if(ok){
 
-						// Update resource
-						Bnxt = Bnow;
-						Bnxt.ID = nxtID;
-						copyTranc[ switches[nxtID].trancID ].nodeCapacity -= traffic;
-						for(int j = 0; j < (int)links[linkID].iList.size(); j++){
-							interID = links[linkID].iList[j];
-							Bnxt.inter[ switches[interID].interID ].nodeCapacity -= traffic;
-						}
-
+						// Update transceiver node
+						copyTranc[ curRes.switches[nxtID].trancID ].nodeCapacity -= traffic;
+						
 						// Record hop
 						htmp.srcID = nowID;
 						htmp.dstID = nxtID;
@@ -468,7 +405,7 @@ bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, i
 		for(int i = 0; i < pod/2; i++){
 			aggrID = numOfCore + pod1 * (pod/2) + randList[i];
 			linkID = linkMap[srcID][aggrID];
-			if(links[linkID].linkCapacity >= traffic){
+			if(curRes.links[linkID].linkCapacity >= traffic){
 				found = true;
 				break;
 			}
@@ -487,7 +424,7 @@ bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, i
 			for(int i = 0; i < pod/2; i++){
 				coreID = ((aggrID - numOfCore) % (pod/2)) * (pod/2) + randList[i];
 				linkID = linkMap[aggrID][coreID];
-				if(links[linkID].linkCapacity >= traffic){
+				if(curRes.links[linkID].linkCapacity >= traffic){
 					found = true;
 					break;
 				}
@@ -500,7 +437,7 @@ bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, i
 			// Core -> Aggr
 			aggrID = numOfCore + pod2 * (pod/2) + coreID / (pod/2);
 			linkID = linkMap[coreID][aggrID];
-			if(links[linkID].linkCapacity < traffic) return false;
+			if(curRes.links[linkID].linkCapacity < traffic) return false;
 			htmp.srcID = coreID;
 			htmp.dstID = aggrID;
 			ansHop.push_back(htmp);
@@ -508,7 +445,7 @@ bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, i
 
 		// Aggr -> Edge(destination)
 		linkID = linkMap[aggrID][dstID];
-		if(links[linkID].linkCapacity < traffic) return false;
+		if(curRes.links[linkID].linkCapacity < traffic) return false;
 		htmp.srcID = aggrID;
 		htmp.dstID = dstID;
 		ansHop.push_back(htmp);
@@ -517,6 +454,133 @@ bool GenInput::findPath(vector<Hop>& hopList, double traffic, bool isWireless, i
 	// Copy back
 	hopList = ansHop;
 	return true;
+}
+
+// Check if resource is enough
+bool GenInput::enoughRes(const vector<Hop>& hopList, double traffic, const CycleRes& curRes){
+
+	// Variable
+	int srcID, dstID, linkID;
+	CycleRes tmpRes;
+
+	// For each hop
+	tmpRes = curRes;
+	for(int i = 0; i < (int)hopList.size(); i++){
+
+		// Wired link
+		srcID = hopList[i].srcID;
+		dstID = hopList[i].dstID;
+		linkID = linkMap[srcID][dstID];
+		if(tmpRes.links[linkID].linkCapacity < traffic) return false;
+		tmpRes.links[linkID].linkCapacity -= traffic;
+
+		// Wireless link
+		if(tmpRes.links[linkID].isWireless){
+
+			// Transceiver node
+			if(tmpRes.trancNode[ tmpRes.switches[srcID].trancID ].nodeCapacity < traffic 
+			|| tmpRes.trancNode[ tmpRes.switches[dstID].trancID ].nodeCapacity < traffic) return false;
+			tmpRes.trancNode[ tmpRes.switches[srcID].trancID ].nodeCapacity -= traffic;
+			tmpRes.trancNode[ tmpRes.switches[dstID].trancID ].nodeCapacity -= traffic;
+
+			// Interference node
+			for(int j = 0; j < (int)tmpRes.links[linkID].iList.size(); j++){
+				srcID = tmpRes.links[linkID].iList[j];
+				if(tmpRes.interNode[ tmpRes.switches[srcID].interID ].nodeCapacity < traffic) return false;
+				tmpRes.interNode[ tmpRes.switches[srcID].interID ].nodeCapacity -= traffic;
+			}
+		}
+	}
+	return true;
+}
+
+// Occurpy resource
+void GenInput::occupyRes(const vector<Hop>& hopList, double traffic, CycleRes& curRes){
+
+	// Variable
+	int srcID, dstID, linkID;
+
+	// Update remaining capacity
+	for(int i = 0; i < (int)hopList.size(); i++){
+		srcID = hopList[i].srcID;
+		dstID = hopList[i].dstID;
+		linkID = linkMap[srcID][dstID];
+		if(curRes.links[linkID].linkCapacity < traffic){
+			fprintf(stderr, "[Error] No enough resource [%d] = %.2lf < %.2lf", linkID, curRes.links[linkID].linkCapacity, traffic);
+			if(curRes.links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
+			else fprintf(stderr, "(wired link).\n");
+			exit(1);
+		}
+		curRes.links[linkID].linkCapacity -= traffic;
+
+		// Wireless link
+		if(curRes.links[linkID].isWireless){
+
+			// Transceiver
+			if(curRes.trancNode[ curRes.switches[srcID].trancID ].nodeCapacity < traffic 
+			|| curRes.trancNode[ curRes.switches[dstID].trancID ].nodeCapacity < traffic){
+				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+				exit(1);
+			}
+			curRes.trancNode[ curRes.switches[srcID].trancID ].nodeCapacity -= traffic;
+			curRes.trancNode[ curRes.switches[dstID].trancID ].nodeCapacity -= traffic;
+
+			// Interference
+			for(int j = 0; j < (int)curRes.links[linkID].iList.size(); j++){
+				srcID = curRes.links[linkID].iList[j];
+				if(curRes.interNode[ curRes.switches[srcID].interID ].nodeCapacity < traffic){
+					fprintf(stderr, "[Error] No enough resource (interference node).\n");
+					exit(1);
+				}
+				curRes.interNode[ curRes.switches[srcID].interID ].nodeCapacity -= traffic;
+			}
+		}
+	}
+}
+
+// Generate traffic according to some distribution
+double GenInput::genTraffic(void){
+
+	// Traffic distribution
+	double T[11] = {
+		0.0001,
+		0.000805842,
+		0.002053525,
+		0.004097321,
+		0.008116616,
+		0.019109530,
+		0.062643354,
+		0.273841963,
+		1.0,
+		6.493816315,
+		133.352143216
+	};
+
+	// Randomly pick one interval
+	int intval = rand()%10;
+
+	// Randomly pick with uniform distribution in the picked interval
+	return T[intval] + ( (T[intval+1] - T[intval]) * (rand()%100) ) / 100;
+}
+
+// Clear resource
+void GenInput::clearResource(void){
+
+	// Switch
+	for(int i = 0; i < (int)switches.size(); i++)
+		switches[i].tcamUsage = TCAM_CAPACITY;
+	
+	// Link
+	for(int i = 0; i < (int)links.size(); i++)
+		links[i].linkCapacity = LINK_CAPACITY;
+	
+	// Transceiver node
+	for(int i = 0; i < (int)trancNode.size(); i++)
+		trancNode[i].nodeCapacity = LINK_CAPACITY;
+	
+	// Interference node
+	for(int i = 0; i < (int)interNode.size(); i++)
+		interNode[i].nodeCapacity = LINK_CAPACITY;
 }
 
 // Generate random list (not repeated)
