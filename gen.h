@@ -66,6 +66,19 @@ class GenInput{
 				vector<NodeCap>trancNode;
 				vector<NodeCap>interNode;
 		};
+		class ChangeNode{
+			public:
+				int flowID;
+				double traffic;
+		};
+		enum{RES_LINK, RES_TRANC, RES_INTER};
+		class CompeteNode{
+			public:
+				int flowID;
+				int resID;
+				int resType;
+				double traffic;
+		};
 
 	/* Private Data */
 	private:
@@ -74,12 +87,21 @@ class GenInput{
 		int numOfCore;					// Number of core switches
 		int numOfAggr;					// Number of aggregate switches
 		int numOfEdge;					// Number of edge switches
+		bool hasCycle;
+		map<int, int>vis;
 		vector<Flow>flows;				// Flow plan to output
 		vector<Switch>switches;			// Switch info
 		vector<Link>links;				// Link info
 		vector<NodeCap>trancNode;		// Transceiver node info
 		vector<NodeCap>interNode;		// Interference node info
 		vector< map<int, int> >linkMap;	// Map the index from (src,dst) to link resource ID
+		vector< vector<ChangeNode> >reqLink;	// Flow list for requiring link resource
+		vector< vector<ChangeNode> >reqTranc;	// Flow list for requiring transceiver resource
+		vector< vector<ChangeNode> >reqInter;	// Flow list for requiring interference resource
+		vector< vector<ChangeNode> >relLink;	// Flow list for releasing link resource
+		vector< vector<ChangeNode> >relTranc;	// Flow list for releasing transceiver resource
+		vector< vector<ChangeNode> >relInter;	// Flow list for releasing interference resource
+		vector< vector<CompeteNode> >compEdge;	// Record competitive graph edge
 
 	/* Private Function */
 	private:
@@ -87,6 +109,9 @@ class GenInput{
 		bool genFinal(const CycleRes&, double, Flow&);		// Generate final state
 		bool findPath(vector<Hop>&, double, bool, int, int, const CycleRes&);	// Not this destination
 		bool enoughRes(const vector<Hop>&, double, const CycleRes&);
+		bool checkCycle(int, const CycleRes&);
+		void checkCycleDfs(int, const CycleRes&);
+		void updateRelation(int);
 		void occupyRes(const vector<Hop>&, double, CycleRes&);
 		void clearResource(void);
 		void genRandList(vector<int>&, int);

@@ -153,10 +153,10 @@ void GenInput::initialize(int k){
 void GenInput::genInput(void){
 
 	// Variable
-	bool hasCycle;
 	double traffic;
 	Flow ftmp;
 	CycleRes cycleRes[2];
+	vector<ChangeNode>vtmp;
 
 	// Clear flows
 	flows.clear();
@@ -170,8 +170,21 @@ void GenInput::genInput(void){
 		cycleRes[i].interNode = interNode;
 	}
 
+	// Initialize requiring/releasing resource list
+	for(int i = 0; i < (int)links.size(); i++){
+		reqLink.push_back(vtmp);
+		relLink.push_back(vtmp);
+	}
+	for(int i = 0; i < (int)trancNode.size(); i++){
+		reqTranc.push_back(vtmp);
+		relTranc.push_back(vtmp);
+	}
+	for(int i = 0; i < (int)interNode.size(); i++){
+		reqInter.push_back(vtmp);
+		relInter.push_back(vtmp);
+	}
+
 	// Until cycle found
-	hasCycle = false;
 	while(!hasCycle){
 
 		// DEBUG
@@ -200,13 +213,66 @@ void GenInput::genInput(void){
 		flows.push_back(ftmp);
 
 		// Record require/release list
+		updateRelation(flows.size()-1);
+		
+		// DEBUG
+		/*
+		for(int i = 0; i < (int)reqLink.size(); i++){
+			if(reqLink[i].size() > 0){
+				fprintf(stderr, "ReqLink %d-%d:", links[i].srcID, links[i].dstID);
+				for(int j = 0; j < (int)reqLink[i].size(); j++)
+					fprintf(stderr, " %d(%.2lf)", reqLink[i][j].flowID, reqLink[i][j].traffic);
+				fprintf(stderr, "\n");
+			}
+		}
+		for(int i = 0; i < (int)reqTranc.size(); i++){
+			if(reqTranc[i].size() > 0){
+				fprintf(stderr, "ReqTranc %d:", trancNode[i].ID);
+				for(int j = 0; j < (int)reqTranc[i].size(); j++)
+					fprintf(stderr, " %d(%.2lf)", reqTranc[i][j].flowID, reqTranc[i][j].traffic);
+				fprintf(stderr, "\n");
+			}
+		}
+		for(int i = 0; i < (int)reqInter.size(); i++){
+			if(reqInter[i].size() > 0){
+				fprintf(stderr, "ReqInter %d:", interNode[i].ID);
+				for(int j = 0; j < (int)reqInter[i].size(); j++)
+					fprintf(stderr, " %d(%.2lf)", reqInter[i][j].flowID, reqInter[i][j].traffic);
+				fprintf(stderr, "\n");
+			}
+		}
+		for(int i = 0; i < (int)relLink.size(); i++){
+			if(relLink[i].size() > 0){
+				fprintf(stderr, "RelLink %d-%d:", links[i].srcID, links[i].dstID);
+				for(int j = 0; j < (int)relLink[i].size(); j++)
+					fprintf(stderr, " %d(%.2lf)", relLink[i][j].flowID, relLink[i][j].traffic);
+				fprintf(stderr, "\n");
+			}
+		}
+		for(int i = 0; i < (int)relTranc.size(); i++){
+			if(relTranc[i].size() > 0){
+				fprintf(stderr, "RelTranc %d:", trancNode[i].ID);
+				for(int j = 0; j < (int)relTranc[i].size(); j++)
+					fprintf(stderr, " %d(%.2lf)", relTranc[i][j].flowID, relTranc[i][j].traffic);
+				fprintf(stderr, "\n");
+			}
+		}
+		for(int i = 0; i < (int)relInter.size(); i++){
+			if(relInter[i].size() > 0){
+				fprintf(stderr, "RelInter %d:", interNode[i].ID);
+				for(int j = 0; j < (int)relInter[i].size(); j++)
+					fprintf(stderr, " %d(%.2lf)", relInter[i][j].flowID, relInter[i][j].traffic);
+				fprintf(stderr, "\n");
+			}
+		}*/
 
 		// Check cycle
+		if(checkCycle(flows.size()-1, cycleRes[0])) break;
 	}
 
 	// Result
-	if(hasCycle) fprintf(stderr, "[Info] Cycle found.\n");
-	else fprintf(stderr, "[Info] Cycle not found.\n");
+	if(hasCycle) fprintf(stderr, "[Info] Cycle found\n");
+	else fprintf(stderr, "[Info] Cycle not found\n");
 }
 
 // Generate initial state
@@ -536,6 +602,242 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic, CycleRes& c
 			}
 		}
 	}
+}
+
+// Check cycle and update requiring/releasing list
+void GenInput::updateRelation(int flowID){
+
+	// Variables
+	int srcID, dstID, linkID;
+	double traffic;
+	ChangeNode ctmp;
+	CompeteNode cptmp;
+	map<int, bool>usedLink;
+	map<int, int>trancCnt;
+	map<int, int>interCnt;
+	map<int, int>::iterator mItr;
+	vector<CompeteNode>vtmp;
+
+	// Initialize
+	ctmp.flowID = flowID;
+	compEdge.push_back(vtmp);
+	traffic = flows[flowID].pathFlow[0].traffic;
+
+	// Initialize initial state
+	usedLink.clear();
+	trancCnt.clear();
+	interCnt.clear();
+	for(int i = 0; i < (int)flows[flowID].pathFlow[0].hop[0].size(); i++){
+		srcID = flows[flowID].pathFlow[0].hop[0][i].srcID;
+		dstID = flows[flowID].pathFlow[0].hop[0][i].dstID;
+		linkID = linkMap[srcID][dstID];
+		usedLink[linkID] = true;
+
+		// Wireless link
+		if(links[linkID].isWireless){
+
+			// Transceiver
+			trancCnt[srcID]++;
+			trancCnt[dstID]++;
+		
+			// Interference
+			for(int j = 0; j < (int)links[linkID].iList.size(); j++)
+				interCnt[ links[linkID].iList[j] ]++;
+		}
+	}
+
+	// Final state difference
+	for(int i = 0; i < (int)flows[flowID].pathFlow[0].hop[1].size(); i++){
+		srcID = flows[flowID].pathFlow[0].hop[1][i].srcID;
+		dstID = flows[flowID].pathFlow[0].hop[1][i].dstID;
+		linkID = linkMap[srcID][dstID];
+
+		// Wireless link
+		if(links[linkID].isWireless){
+
+			// Transceiver
+			trancCnt[srcID]--;
+			trancCnt[dstID]--;
+
+			// Interference
+			for(int j = 0; j < (int)links[linkID].iList.size(); j++)
+				interCnt[ links[linkID].iList[j] ]--;
+		}
+
+		// New link
+		if(!usedLink[linkID]){
+			ctmp.traffic = traffic;
+			reqLink[linkID].push_back(ctmp);
+
+			// Link to all flows releasing this resource when resource is not enough
+			for(int j = 0; j < (int)relLink[linkID].size(); j++){
+				cptmp.flowID = relLink[linkID][j].flowID;
+				cptmp.traffic = traffic;
+				cptmp.resID = linkID;
+				cptmp.resType = RES_LINK;
+				compEdge[flowID].push_back(cptmp);
+			}
+		}
+
+		// Mark as false for later use
+		else
+			usedLink[linkID] = false;
+	}
+
+	// Releasing link for each marked initial link
+	for(int i = 0; i < (int)flows[flowID].pathFlow[0].hop[0].size(); i++){
+		srcID = flows[flowID].pathFlow[0].hop[0][i].srcID;
+		dstID = flows[flowID].pathFlow[0].hop[0][i].dstID;
+		linkID = linkMap[srcID][dstID];
+		if(usedLink[linkID]){
+			ctmp.traffic = traffic;
+			relLink[linkID].push_back(ctmp);
+
+			// All flows requiring this resource link to this flow
+			for(int j = 0; j < (int)reqLink[linkID].size(); j++){
+				cptmp.flowID = flowID;
+				cptmp.traffic = reqLink[linkID][j].traffic;
+				cptmp.resID = linkID;
+				cptmp.resType = RES_LINK;
+				compEdge[reqLink[linkID][j].flowID].push_back(cptmp);
+			}
+		}
+	}
+
+	// Transceiver
+	for(mItr = trancCnt.begin(); mItr != trancCnt.end(); mItr++){
+
+		// Requiring
+		if(mItr->second < 0){
+			ctmp.traffic = -(mItr->second * traffic);
+			reqTranc[ switches[mItr->first].trancID ].push_back(ctmp);
+
+			// Link to all flows releasing this resource
+			for(int j = 0; j < (int)relTranc[ switches[mItr->first].trancID ].size(); j++){
+				cptmp.flowID = relTranc[ switches[mItr->first].trancID ][j].flowID;
+				cptmp.traffic = ctmp.traffic;
+				cptmp.resID = switches[mItr->first].trancID;
+				cptmp.resType = RES_TRANC;
+				compEdge[flowID].push_back(cptmp);
+			}
+		}
+
+		// Releasing
+		if(mItr->second > 0){
+			ctmp.traffic = mItr->second * traffic;
+			relTranc[ switches[mItr->first].trancID ].push_back(ctmp);
+
+			// All flows requiring this resource link to this flow
+			for(int j = 0; j < (int)reqTranc[ switches[mItr->first].trancID ].size(); j++){
+				cptmp.flowID = flowID;
+				cptmp.traffic = reqTranc[ switches[mItr->first].trancID ][j].traffic;
+				cptmp.resID = switches[mItr->first].trancID;
+				cptmp.resType = RES_TRANC;
+				compEdge[reqTranc[ switches[mItr->first].trancID ][j].flowID].push_back(cptmp);
+			}
+		}
+	}
+
+	// Interference
+	for(mItr = interCnt.begin(); mItr != interCnt.end(); mItr++){
+
+		// Requiring
+		if(mItr->second < 0){
+			ctmp.traffic = -(mItr->second * traffic);
+			reqInter[ switches[mItr->first].interID ].push_back(ctmp);
+
+			// Link to all flows releasing this resource
+			for(int j = 0; j < (int)relInter[ switches[mItr->first].interID ].size(); j++){
+				cptmp.flowID = relInter[ switches[mItr->first].interID ][j].flowID;
+				cptmp.traffic = ctmp.traffic;
+				cptmp.resID = switches[mItr->first].interID;
+				cptmp.resType = RES_INTER;
+				compEdge[flowID].push_back(cptmp);
+			}
+		}
+
+		// Releasing
+		if(mItr->second > 0){
+			ctmp.traffic = mItr->second * traffic;
+			relInter[ switches[mItr->first].interID ].push_back(ctmp);
+
+			// All flows requiring this resource link to this flow
+			for(int j = 0; j < (int)reqInter[ switches[mItr->first].interID ].size(); j++){
+				cptmp.flowID = flowID;
+				cptmp.traffic = reqInter[ switches[mItr->first].interID ][j].traffic;
+				cptmp.resID = switches[mItr->first].interID;
+				cptmp.resType = RES_INTER;
+				compEdge[reqInter[ switches[mItr->first].interID ][j].flowID].push_back(cptmp);
+			}
+		}
+	}
+}
+
+// Check if competitive graph has cycle
+void GenInput::checkCycleDfs(int nowID, const CycleRes& curRes){
+
+	// Variable
+	int rID, rType, nxtID;
+	bool isEdge;
+	double traffic;
+
+	// Temporary visit
+	vis[nowID] = 1;
+
+	// Search neighbors
+	for(int i = 0; i < (int)compEdge[nowID].size(); i++){
+		rID = compEdge[nowID][i].resID;
+		rType = compEdge[nowID][i].resType;
+		traffic = compEdge[nowID][i].traffic;
+		nxtID = compEdge[nowID][i].flowID;
+
+		// Check if it's an edge
+		isEdge = false;
+		switch(rType){
+			case RES_LINK:
+				if(curRes.links[rID].linkCapacity >= traffic) isEdge = false;
+//				fprintf(stderr, "L %.2lf >= %.2lf\n", curRes.links[rID].linkCapacity, traffic);
+				break;
+			case RES_TRANC:
+				if(curRes.trancNode[rID].nodeCapacity >= traffic) isEdge = false;
+//				fprintf(stderr, "T %.2lf >= %.2lf\n", curRes.trancNode[rID].nodeCapacity, traffic);
+				break;
+			case RES_INTER:
+				if(curRes.interNode[rID].nodeCapacity >= traffic) isEdge = false;
+//				fprintf(stderr, "I %.2lf >= %.2lf\n", curRes.interNode[rID].nodeCapacity, traffic);
+				break;
+		}
+		if(!isEdge) continue;
+
+		// Cycle
+		if(vis[nxtID] == 1){
+			hasCycle = true;
+			return;
+		}
+
+		// Search
+		if(!vis[nxtID]) checkCycleDfs(nxtID, curRes);
+
+		// Prune
+		if(hasCycle) return;
+	}
+
+	// Finally done
+	vis[nowID] = 2;
+}
+
+// Check if cycle exist
+bool GenInput::checkCycle(int flowID, const CycleRes& curRes){
+
+	// Initialize
+	vis.clear();
+	hasCycle = false;
+	
+	// Start from current flow node
+	checkCycleDfs(flowID, curRes);
+	
+	// Return if cycle exist
+	return hasCycle;
 }
 
 // Generate traffic according to some distribution
