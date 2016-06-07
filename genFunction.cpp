@@ -214,6 +214,12 @@ void GenInput::genInput(void){
 
 		// Record require/release list
 		updateRelation(flows.size()-1);
+
+		// Create graph
+		createGraph(cycleRes[0]);
+
+		// Check cycle
+		if(checkCycle(cycleRes[0])) break;
 		
 		// DEBUG
 		/*
@@ -265,9 +271,6 @@ void GenInput::genInput(void){
 				fprintf(stderr, "\n");
 			}
 		}*/
-
-		// Check cycle
-		if(checkCycle(flows.size()-1, cycleRes[0])) break;
 	}
 
 	// Result
@@ -611,16 +614,13 @@ void GenInput::updateRelation(int flowID){
 	int srcID, dstID, linkID;
 	double traffic;
 	ChangeNode ctmp;
-	CompeteNode cptmp;
 	map<int, bool>usedLink;
 	map<int, int>trancCnt;
 	map<int, int>interCnt;
 	map<int, int>::iterator mItr;
-	vector<CompeteNode>vtmp;
 
 	// Initialize
 	ctmp.flowID = flowID;
-	compEdge.push_back(vtmp);
 	traffic = flows[flowID].pathFlow[0].traffic;
 
 	// Initialize initial state
@@ -668,15 +668,6 @@ void GenInput::updateRelation(int flowID){
 		if(!usedLink[linkID]){
 			ctmp.traffic = traffic;
 			reqLink[linkID].push_back(ctmp);
-
-			// Link to all flows releasing this resource when resource is not enough
-			for(int j = 0; j < (int)relLink[linkID].size(); j++){
-				cptmp.flowID = relLink[linkID][j].flowID;
-				cptmp.traffic = traffic;
-				cptmp.resID = linkID;
-				cptmp.resType = RES_LINK;
-				compEdge[flowID].push_back(cptmp);
-			}
 		}
 
 		// Mark as false for later use
@@ -692,15 +683,6 @@ void GenInput::updateRelation(int flowID){
 		if(usedLink[linkID]){
 			ctmp.traffic = traffic;
 			relLink[linkID].push_back(ctmp);
-
-			// All flows requiring this resource link to this flow
-			for(int j = 0; j < (int)reqLink[linkID].size(); j++){
-				cptmp.flowID = flowID;
-				cptmp.traffic = reqLink[linkID][j].traffic;
-				cptmp.resID = linkID;
-				cptmp.resType = RES_LINK;
-				compEdge[reqLink[linkID][j].flowID].push_back(cptmp);
-			}
 		}
 	}
 
@@ -711,30 +693,12 @@ void GenInput::updateRelation(int flowID){
 		if(mItr->second < 0){
 			ctmp.traffic = -(mItr->second * traffic);
 			reqTranc[ switches[mItr->first].trancID ].push_back(ctmp);
-
-			// Link to all flows releasing this resource
-			for(int j = 0; j < (int)relTranc[ switches[mItr->first].trancID ].size(); j++){
-				cptmp.flowID = relTranc[ switches[mItr->first].trancID ][j].flowID;
-				cptmp.traffic = ctmp.traffic;
-				cptmp.resID = switches[mItr->first].trancID;
-				cptmp.resType = RES_TRANC;
-				compEdge[flowID].push_back(cptmp);
-			}
 		}
 
 		// Releasing
 		if(mItr->second > 0){
 			ctmp.traffic = mItr->second * traffic;
 			relTranc[ switches[mItr->first].trancID ].push_back(ctmp);
-
-			// All flows requiring this resource link to this flow
-			for(int j = 0; j < (int)reqTranc[ switches[mItr->first].trancID ].size(); j++){
-				cptmp.flowID = flowID;
-				cptmp.traffic = reqTranc[ switches[mItr->first].trancID ][j].traffic;
-				cptmp.resID = switches[mItr->first].trancID;
-				cptmp.resType = RES_TRANC;
-				compEdge[reqTranc[ switches[mItr->first].trancID ][j].flowID].push_back(cptmp);
-			}
 		}
 	}
 
@@ -745,96 +709,142 @@ void GenInput::updateRelation(int flowID){
 		if(mItr->second < 0){
 			ctmp.traffic = -(mItr->second * traffic);
 			reqInter[ switches[mItr->first].interID ].push_back(ctmp);
-
-			// Link to all flows releasing this resource
-			for(int j = 0; j < (int)relInter[ switches[mItr->first].interID ].size(); j++){
-				cptmp.flowID = relInter[ switches[mItr->first].interID ][j].flowID;
-				cptmp.traffic = ctmp.traffic;
-				cptmp.resID = switches[mItr->first].interID;
-				cptmp.resType = RES_INTER;
-				compEdge[flowID].push_back(cptmp);
-			}
 		}
 
 		// Releasing
 		if(mItr->second > 0){
 			ctmp.traffic = mItr->second * traffic;
 			relInter[ switches[mItr->first].interID ].push_back(ctmp);
-
-			// All flows requiring this resource link to this flow
-			for(int j = 0; j < (int)reqInter[ switches[mItr->first].interID ].size(); j++){
-				cptmp.flowID = flowID;
-				cptmp.traffic = reqInter[ switches[mItr->first].interID ][j].traffic;
-				cptmp.resID = switches[mItr->first].interID;
-				cptmp.resType = RES_INTER;
-				compEdge[reqInter[ switches[mItr->first].interID ][j].flowID].push_back(cptmp);
-			}
 		}
 	}
 }
 
-// Check if competitive graph has cycle
-void GenInput::checkCycleDfs(int nowID, const CycleRes& curRes){
+// Create competitive graph
+void GenInput::createGraph(const CycleRes& curRes){
 
 	// Variable
-	int rID, rType, nxtID;
-	bool isEdge;
+	int flowID;
 	double traffic;
+	vector<int>vtmp;
 
-	// Temporary visit
+	// Create node for each flow
+	vtmp.clear();
+	compEdge.clear();
+	for(int i = 0; i < (int)flows.size(); i++)
+		compEdge.push_back(vtmp);
+
+	// For each requiring resource (link)
+	for(int i = 0; i < (int)reqLink.size(); i++){
+		for(int j = 0; j < (int)reqLink[i].size(); j++){
+			flowID = reqLink[i][j].flowID;
+			traffic = reqLink[i][j].traffic;
+
+			// Require > Remain
+			if(traffic > curRes.links[i].linkCapacity){
+
+				// No releasing resource: deadlock
+				if(relLink[i].size() == 0){
+					fprintf(stderr, "[Error] No releasing resource. DL.\n");
+					exit(1);
+				}
+
+				// Require -> Release
+				for(int k = 0; k < (int)relLink[i].size(); k++)
+					compEdge[flowID].push_back(relLink[i][k].flowID);
+			}
+		}
+	}
+
+	// For each requiring resource (transceiver)
+	for(int i = 0; i < (int)reqTranc.size(); i++){
+		for(int j = 0; j < (int)reqTranc[i].size(); j++){
+			flowID = reqTranc[i][j].flowID;
+			traffic = reqTranc[i][j].traffic;
+
+			// Require > Remain
+			if(traffic > curRes.trancNode[i].nodeCapacity){
+
+				// No releasing resource: deadlock
+				if(relTranc[i].size() == 0){
+					fprintf(stderr, "[Error] No releasing resource. DL.\n");
+					exit(1);
+				}
+
+				// Require -> Release
+				for(int k = 0; k < (int)relTranc[i].size(); k++)
+					compEdge[flowID].push_back(relTranc[i][k].flowID);
+			}
+		}
+	}
+
+	// For each requiring resource (interference)
+	for(int i = 0; i < (int)reqInter.size(); i++){
+		for(int j = 0; j < (int)reqInter[i].size(); j++){
+			flowID = reqInter[i][j].flowID;
+			traffic = reqInter[i][j].traffic;
+
+			// Require > Remain
+			if(traffic > curRes.interNode[i].nodeCapacity){
+
+				// No releasing resource: deadlock
+				if(relInter[i].size() == 0){
+					fprintf(stderr, "[Error] No releasing resource. DL.\n");
+					exit(1);
+				}
+
+				// Require -> Release
+				for(int k = 0; k < (int)relInter[i].size(); k++)
+					compEdge[flowID].push_back(relInter[i][k].flowID);
+			}
+		}
+	}
+
+}
+
+// DFS for cycle checking
+void GenInput::checkCycleDfs(int nowID){
+
+	// Variable
+	int nxtID;
+
+	// Temp mark
 	vis[nowID] = 1;
 
-	// Search neighbors
+	// Neighbor
 	for(int i = 0; i < (int)compEdge[nowID].size(); i++){
-		rID = compEdge[nowID][i].resID;
-		rType = compEdge[nowID][i].resType;
-		traffic = compEdge[nowID][i].traffic;
-		nxtID = compEdge[nowID][i].flowID;
+		nxtID = compEdge[nowID][i];
 
-		// Check if it's an edge
-		isEdge = false;
-		switch(rType){
-			case RES_LINK:
-				if(curRes.links[rID].linkCapacity >= traffic) isEdge = false;
-//				fprintf(stderr, "L %.2lf >= %.2lf\n", curRes.links[rID].linkCapacity, traffic);
-				break;
-			case RES_TRANC:
-				if(curRes.trancNode[rID].nodeCapacity >= traffic) isEdge = false;
-//				fprintf(stderr, "T %.2lf >= %.2lf\n", curRes.trancNode[rID].nodeCapacity, traffic);
-				break;
-			case RES_INTER:
-				if(curRes.interNode[rID].nodeCapacity >= traffic) isEdge = false;
-//				fprintf(stderr, "I %.2lf >= %.2lf\n", curRes.interNode[rID].nodeCapacity, traffic);
-				break;
-		}
-		if(!isEdge) continue;
-
-		// Cycle
+		// Cycle found
 		if(vis[nxtID] == 1){
 			hasCycle = true;
 			return;
 		}
 
-		// Search
-		if(!vis[nxtID]) checkCycleDfs(nxtID, curRes);
+		// Not yet visited
+		if(!vis[nxtID]) checkCycleDfs(nxtID);
 
 		// Prune
 		if(hasCycle) return;
 	}
 
-	// Finally done
+	// Finally mark
 	vis[nowID] = 2;
 }
 
 // Check if cycle exist
-bool GenInput::checkCycle(int flowID, const CycleRes& curRes){
+bool GenInput::checkCycle(const CycleRes& curRes){
 
 	// Initialize
 	vis.clear();
 	hasCycle = false;
 	
 	// Start from current flow node
-	checkCycleDfs(flowID, curRes);
+	for(int i = 0; i < (int)compEdge.size(); i++){
+		if(!vis[i]){
+			checkCycleDfs(i);
+			if(hasCycle) break;
+		}
+	}
 	
 	// Return if cycle exist
 	return hasCycle;

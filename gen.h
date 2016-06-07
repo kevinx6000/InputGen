@@ -71,14 +71,6 @@ class GenInput{
 				int flowID;
 				double traffic;
 		};
-		enum{RES_LINK, RES_TRANC, RES_INTER};
-		class CompeteNode{
-			public:
-				int flowID;
-				int resID;
-				int resType;
-				double traffic;
-		};
 
 	/* Private Data */
 	private:
@@ -101,7 +93,7 @@ class GenInput{
 		vector< vector<ChangeNode> >relLink;	// Flow list for releasing link resource
 		vector< vector<ChangeNode> >relTranc;	// Flow list for releasing transceiver resource
 		vector< vector<ChangeNode> >relInter;	// Flow list for releasing interference resource
-		vector< vector<CompeteNode> >compEdge;	// Record competitive graph edge
+		vector< vector<int> >compEdge;	// Record competitive graph edge
 
 	/* Private Function */
 	private:
@@ -109,9 +101,10 @@ class GenInput{
 		bool genFinal(const CycleRes&, double, Flow&);		// Generate final state
 		bool findPath(vector<Hop>&, double, bool, int, int, const CycleRes&);	// Not this destination
 		bool enoughRes(const vector<Hop>&, double, const CycleRes&);
-		bool checkCycle(int, const CycleRes&);
-		void checkCycleDfs(int, const CycleRes&);
+		bool checkCycle(const CycleRes&);
+		void checkCycleDfs(int);
 		void updateRelation(int);
+		void createGraph(const CycleRes&);
 		void occupyRes(const vector<Hop>&, double, CycleRes&);
 		void clearResource(void);
 		void genRandList(vector<int>&, int);
