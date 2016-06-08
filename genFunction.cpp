@@ -185,8 +185,8 @@ void GenInput::genInitial(void){
 		if(links[linkMap[ aggrID[0] ][ coreID[0] ]].linkCapacity < cycleRes[1].maxRate
 		&& links[linkMap[ aggrID[1] ][ coreID[1] ]].linkCapacity < cycleRes[0].maxRate){
 			fprintf(stderr, "[Info] Enter extreme phase check...\n");
-			if(links[linkMap[ aggrID[0] ][ coreID[0] ]].linkCapacity < cycleRes[1].maxRate * 0.05
-			&& links[linkMap[ aggrID[1] ][ coreID[1] ]].linkCapacity < cycleRes[0].maxRate * 0.05)
+			if(links[linkMap[ aggrID[0] ][ coreID[0] ]].linkCapacity < cycleRes[1].maxRate * 0.5
+			&& links[linkMap[ aggrID[1] ][ coreID[1] ]].linkCapacity < cycleRes[0].maxRate * 0.5)
 				break;
 		}
 
