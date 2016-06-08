@@ -2,12 +2,58 @@
 #include "header.h"
 #include "gen.h"
 
+// Read existing flows
+void GenInput::readFlow(void){
+
+	// Variables
+	int numFlow, numPath, numHop;
+	Flow ftmp;
+	PathFlow ptmp;
+	Hop htmp;
+
+	// Pod
+	scanf("%d", &this->pod);
+
+	// Existing flows
+	scanf("%d", &numFlow);
+	for(int fID = 0; fID < numFlow; fID++){
+
+		// Ingress switch
+		scanf("%d", &ftmp.src);
+
+		// Paths
+		scanf("%d", &numPath);
+		for(int pID = 0; pID < numPath; pID++){
+
+			// Traffic volume
+			scanf("%lf", &ptmp.traffic);
+
+			// Initial and final path
+			for(int s = 0; s < 2; s++){
+
+				// Number of hops
+				scanf("%d", &numHop);
+				for(int hID = 0; hID < numHop; hID++){
+
+					// S-T
+					scanf("%d%d", &htmp.srcID, &htmp.dstID);
+					ptmp.hop[s].push_back(htmp);
+				}
+			}
+			ftmp.pathFlow.push_back(ptmp);
+			for(int s = 0; s < 2; s++) ptmp.hop[s].clear();
+		}
+		oldFlows.push_back(ftmp);
+		ftmp.pathFlow.clear();
+	}
+}
+
 // Initializer
-void GenInput::initialize(int k){
+void GenInput::initialize(void){
 
 	// Variable
 	int totalSwitch;
-	int src, dst, mid;
+	int src, dst, mid, k;
 	double x1, x2, y1, y2;
 	Switch stmp;
 	Link ltmp;
@@ -20,10 +66,8 @@ void GenInput::initialize(int k){
 	const double widSw = 24*inch;
 	const double lenSw = 48*inch;
 
-	// Pod
-	this->pod = k;
-
 	// Number of switches
+	k = this->pod;
 	this->numOfCore = k*k/4;
 	this->numOfAggr = k*k/2;
 	this->numOfEdge = k*k/2;
@@ -163,6 +207,11 @@ void GenInput::genInitial(void){
 	// Clear resource
 	clearResource();
 
+	// Existing flows
+	for(int fID = 0; fID < (int)oldFlows.size(); fID++)
+		for(int pID = 0; pID < (int)oldFlows[fID].pathFlow.size(); pID++)
+			occupyRes(oldFlows[fID].pathFlow[pID].hop[0], oldFlows[fID].pathFlow[pID].traffic);
+
 	// Randomly pick one pod
 	podID = rand()%pod;
 
@@ -185,8 +234,8 @@ void GenInput::genInitial(void){
 		if(links[linkMap[ aggrID[0] ][ coreID[0] ]].linkCapacity < cycleRes[1].maxRate
 		&& links[linkMap[ aggrID[1] ][ coreID[1] ]].linkCapacity < cycleRes[0].maxRate){
 			fprintf(stderr, "[Info] Enter extreme phase check...\n");
-			if(links[linkMap[ aggrID[0] ][ coreID[0] ]].linkCapacity < cycleRes[1].maxRate * 0.5
-			&& links[linkMap[ aggrID[1] ][ coreID[1] ]].linkCapacity < cycleRes[0].maxRate * 0.5)
+			if(links[linkMap[ aggrID[0] ][ coreID[0] ]].linkCapacity < cycleRes[1].maxRate * 0.05
+			&& links[linkMap[ aggrID[1] ][ coreID[1] ]].linkCapacity < cycleRes[0].maxRate * 0.05)
 				break;
 		}
 
@@ -266,6 +315,11 @@ void GenInput::genFinal(void){
 
 	// Clear resource
 	clearResource();
+
+	// Existing flows
+	for(int fID = 0; fID < (int)oldFlows.size(); fID++)
+		for(int pID = 0; pID < (int)oldFlows[fID].pathFlow.size(); pID++)
+			occupyRes(oldFlows[fID].pathFlow[pID].hop[1], oldFlows[fID].pathFlow[pID].traffic);
 
 	// Assume flows without competition remain the same
 	for(int i = 0; i < (int)flows.size(); i++){
@@ -570,10 +624,36 @@ void GenInput::output(void){
 	printf("%d\n", pod);
 
 	// Number of flows
-	printf("%d\n", (int)flows.size());
+	printf("%d\n", (int)oldFlows.size() + (int)flows.size());
+
+	// Existing flows
+	for(int flowID = 0; flowID < (int)oldFlows.size(); flowID++){
+
+		// Ingress switch ID
+		printf("%d\n", oldFlows[flowID].src);
+
+		// For each path flows
+		printf("%d\n", (int)oldFlows[flowID].pathFlow.size());
+		for(int pathID = 0; pathID < (int)oldFlows[flowID].pathFlow.size(); pathID++){
+
+			// Traffic volume
+			printf("%.10lf\n", oldFlows[flowID].pathFlow[pathID].traffic);
+
+			// Initial and final state
+			for(int state = 0; state < 2; state++){
+
+				// For each hop
+				printf("%d\n", (int)oldFlows[flowID].pathFlow[pathID].hop[state].size());
+				for(int hop = 0; hop < (int)oldFlows[flowID].pathFlow[pathID].hop[state].size(); hop++){
+					printf("%d %d\n", oldFlows[flowID].pathFlow[pathID].hop[state][hop].srcID, oldFlows[flowID].pathFlow[pathID].hop[state][hop].dstID);
+				}
+			}
+		}
+	}
 
 	// For each flows
 	for(int flowID = 0; flowID < (int)flows.size(); flowID++){
+
 		// Ingress switch ID
 		printf("%d\n", flows[flowID].src);
 

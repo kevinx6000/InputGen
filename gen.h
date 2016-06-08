@@ -9,7 +9,8 @@ class GenInput{
 
 	/* Public Functions */
 	public:
-		void initialize(int);		// Initializer
+		void readFlow(void);		// Read existing flows
+		void initialize(void);		// Initializer
 		void genInitial(void);		// Generate initial state
 		void genFinal(void);		// Generate final state
 		void output(void);			// Output flow
@@ -72,6 +73,7 @@ class GenInput{
 		int numOfEdge;					// Number of edge switches
 		CycleRes cycleRes[2];
 		vector<Flow>flows;				// Flow plan to output
+		vector<Flow>oldFlows;			// Existing flows
 		vector<Switch>switches;			// Switch info
 		vector<Link>links;				// Link info
 		vector<NodeCap>trancNode;		// Transceiver node info
