@@ -172,7 +172,7 @@ void GenInput::genInitial(void){
 	for(int i = 0; i < pod/2; i++){
 		ctmp.aggrID = numOfCore + podID * (pod/2) + i;
 
-		// For each aggregate switch, pick half core switch as chain resource
+		// For each aggregate switch, pick 2/3 core switch as chain resource
 		genRandList(randList, pod/2);
 		for(int j = 0; j < pod/3; j++){
 			ctmp.coreID = ((ctmp.aggrID - numOfCore) % (pod/2)) * (pod/2) + randList[j];
@@ -182,11 +182,10 @@ void GenInput::genInitial(void){
 		}
 	}
 
-fprintf(stderr, "Chain len = %d\n", (int)chainRes.size()-1);
+fprintf(stderr, "[Info] Cycle len = %d\n", (int)chainRes.size());
 
-	// Leave the last one as empty
-	// Fill the last-1 one to 95% capacity
-	curID = chainRes.size()-2;
+	// Fill the last one to 95% capacity
+	curID = chainRes.size()-1;
 	while(true){
 
 		// Traffic data rate
@@ -235,12 +234,12 @@ fprintf(stderr, "Chain len = %d\n", (int)chainRes.size()-1);
 			flows.push_back(ftmp);
 		}
 
-		// Reach 95% or more (remain 5% or less)
-		if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.05) break;
+		// Reach 99% or more (remain 1% or less)
+		if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.01) break;
 	}
 
-	// Start from last-2 one to the first one
-	for(curID = chainRes.size()-3; curID >= 0; curID--){
+	// Start from last-1 one to the first one
+	for(curID = chainRes.size()-2; curID >= 0; curID--){
 
 		// Until chain exist
 		while(true){
@@ -293,10 +292,16 @@ fprintf(stderr, "Chain len = %d\n", (int)chainRes.size()-1);
 			}
 
 			// End:
-			// 1. Reach 95% or more (remain 5% or less)
+			// 1. Reach 99% or more (remain 1% or less)
 			// 2. Chain created
 			if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.01
-			&& chainRes[curID].maxRate > links[ chainRes[curID+1].rID ].linkCapacity) break;
+			&& chainRes[curID].maxRate > links[ chainRes[curID+1].rID ].linkCapacity){
+
+				// Break condition:
+				// 1. Not the first one
+				// 2. First one and last migration cause cycle
+				if(curID != 0 || links[ chainRes[curID].rID ].linkCapacity < chainRes[ chainRes.size()-1 ].maxRate) break;
+			}
 		}
 	}
 }
@@ -306,6 +311,7 @@ void GenInput::genFinal(void){
 
 	// Variables
 	int aggrID, coreID, edgeID, podID;
+	int len;
 	double traffic;
 	map<int, bool>isCompFlow;
 
@@ -314,7 +320,7 @@ void GenInput::genFinal(void){
 
 	// Record the competition flow
 	isCompFlow.clear();
-	for(int i = 0; i < (int)chainRes.size()-1; i++)
+	for(int i = 0; i < (int)chainRes.size(); i++)
 		isCompFlow[chainRes[i].maxFlowID] = true;
 
 	// Assume flows without competition remain the same
@@ -331,8 +337,9 @@ void GenInput::genFinal(void){
 	}
 
 	// DEADLOCK, need to fix
-	for(int i = 0; i < (int)chainRes.size()-1; i++){
-		if(chainRes[i].maxRate > links[chainRes[i+1].rID].linkCapacity + chainRes[i+1].maxRate){
+	len = chainRes.size();
+	for(int i = 0; i < len; i++){
+		if(chainRes[i].maxRate > links[chainRes[(i+1)%len].rID].linkCapacity + chainRes[(i+1)%len].maxRate){
 			fprintf(stderr, "[Error] Sorry, such plan exists deadlock.\n");
 			exit(1);
 		}
@@ -342,13 +349,13 @@ void GenInput::genFinal(void){
 	podID = (links[ chainRes[0].rID ].srcID - numOfCore) / (pod/2);
 
 	// For each flow in the chain: choose compete resource of initial path of next flow
-	for(int i = 0; i < (int)chainRes.size()-1; i++){
-		aggrID = links[ chainRes[i+1].rID ].srcID;
-		coreID = links[ chainRes[i+1].rID ].dstID;
+	for(int i = 0; i < len; i++){
+		aggrID = links[ chainRes[(i+1)%len].rID ].srcID;
+		coreID = links[ chainRes[(i+1)%len].rID ].dstID;
 		edgeID = flows[ chainRes[i].maxFlowID ].src;
 		traffic = chainRes[i].maxRate;
 		if(!findWiredPath(flows[ chainRes[i].maxFlowID ].pathFlow[0].hop[1], traffic, podID, coreID, aggrID, edgeID)){
-			fprintf(stderr, "[Error] GG, cannot find such a path to gen chain.\n");
+			fprintf(stderr, "[Error] GG, cannot find such a path to gen cycle.\n");
 			exit(1);
 		}
 
