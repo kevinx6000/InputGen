@@ -182,7 +182,7 @@ void GenInput::genInitial(void){
 		}
 	}
 
-fprintf(stderr, "Chain len = %d\n", (int)chainRes.size()-1);
+//fprintf(stderr, "Chain len = %d\n", (int)chainRes.size()-1);
 
 	// Leave the last one as empty
 	// Fill the last-1 one to 95% capacity
@@ -220,7 +220,8 @@ fprintf(stderr, "Chain len = %d\n", (int)chainRes.size()-1);
 			while(!findAnotherPath(ptmp.hop[0], ptmp.traffic, podID)){
 				retry ++;
 				if(retry > 10){
-					fprintf(stderr, "[Error] Solution not found, GG.\n");
+//					fprintf(stderr, "[Error] Solution not found, GG.\n");
+fprintf(stderr, "Fail\n");
 					exit(1);
 				}
 			}
@@ -277,7 +278,8 @@ fprintf(stderr, "Chain len = %d\n", (int)chainRes.size()-1);
 				while(!findAnotherPath(ptmp.hop[0], ptmp.traffic, podID)){
 					retry ++;
 					if(retry > 10){
-						fprintf(stderr, "[Error] Solution not found, GG.\n");
+//						fprintf(stderr, "[Error] Solution not found, GG.\n");
+fprintf(stderr, "Fail\n");
 						exit(1);
 					}
 				}
@@ -333,7 +335,8 @@ void GenInput::genFinal(void){
 	// DEADLOCK, need to fix
 	for(int i = 0; i < (int)chainRes.size()-1; i++){
 		if(chainRes[i].maxRate > links[chainRes[i+1].rID].linkCapacity + chainRes[i+1].maxRate){
-			fprintf(stderr, "[Error] Sorry, such plan exists deadlock.\n");
+//			fprintf(stderr, "[Error] Sorry, such plan exists deadlock.\n");
+fprintf(stderr, "Fail\n");
 			exit(1);
 		}
 	}
@@ -348,7 +351,8 @@ void GenInput::genFinal(void){
 		edgeID = flows[ chainRes[i].maxFlowID ].src;
 		traffic = chainRes[i].maxRate;
 		if(!findWiredPath(flows[ chainRes[i].maxFlowID ].pathFlow[0].hop[1], traffic, podID, coreID, aggrID, edgeID)){
-			fprintf(stderr, "[Error] GG, cannot find such a path to gen chain.\n");
+//			fprintf(stderr, "[Error] GG, cannot find such a path to gen chain.\n");
+fprintf(stderr, "Fail\n");
 			exit(1);
 		}
 
@@ -389,9 +393,10 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 		dstID = hopList[i].dstID;
 		linkID = linkMap[srcID][dstID];
 		if(links[linkID].linkCapacity < traffic){
-			fprintf(stderr, "[Error] No enough resource ");
-			if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
-			else fprintf(stderr, "(wired link).\n");
+//			fprintf(stderr, "[Error] No enough resource ");
+fprintf(stderr, "Fail\n");
+//			if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
+//			else fprintf(stderr, "(wired link).\n");
 			exit(1);
 		}
 		links[linkID].linkCapacity -= traffic;
@@ -401,7 +406,8 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 
 			// Transceiver
 			if(trancNode[ switches[srcID].trancID ].nodeCapacity < traffic || trancNode[ switches[dstID].trancID ].nodeCapacity < traffic){
-				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+//				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+fprintf(stderr, "Fail\n");
 				exit(1);
 			}
 			trancNode[ switches[srcID].trancID ].nodeCapacity -= traffic;
@@ -411,7 +417,8 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 			for(int j = 0; j < (int)links[linkID].iList.size(); j++){
 				srcID = links[linkID].iList[j];
 				if(interNode[ switches[srcID].interID ].nodeCapacity < traffic){
-					fprintf(stderr, "[Error] No enough resource (interference node).\n");
+//					fprintf(stderr, "[Error] No enough resource (interference node).\n");
+fprintf(stderr, "Fail\n");
 					exit(1);
 				}
 				interNode[ switches[srcID].interID ].nodeCapacity -= traffic;
@@ -564,7 +571,7 @@ bool GenInput::findAnotherPath(vector<Hop>& hopList, double traffic, int podID){
 		}
 	}
 	if(i == pod){
-		fprintf(stderr, "[Info] I think this is impossible...\n");
+//		fprintf(stderr, "[Info] I think this is impossible...\n");
 		return false;
 	}
 
