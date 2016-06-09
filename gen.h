@@ -54,14 +54,13 @@ class GenInput{
 				int ID;
 				double nodeCapacity;
 		};
-		class CycleRes{
+		class ChainRes{
 			public:
 				int rID;
+				int aggrID;
+				int coreID;
 				int maxFlowID;
-				int maxPathID;
 				double maxRate;
-				vector<int>flowID;
-				vector<int>pathID;
 		};
 
 	/* Private Data */
@@ -70,13 +69,13 @@ class GenInput{
 		int numOfCore;					// Number of core switches
 		int numOfAggr;					// Number of aggregate switches
 		int numOfEdge;					// Number of edge switches
-		CycleRes cycleRes[2];
 		vector<Flow>flows;				// Flow plan to output
 		vector<Switch>switches;			// Switch info
 		vector<Link>links;				// Link info
 		vector<NodeCap>trancNode;		// Transceiver node info
 		vector<NodeCap>interNode;		// Interference node info
 		vector< map<int, int> >linkMap;	// Map the index from (src,dst) to link resource ID
+		vector<ChainRes>chainRes;		// Chain resource
 
 	/* Private Function */
 	private:
