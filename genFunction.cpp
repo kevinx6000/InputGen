@@ -191,7 +191,8 @@ void GenInput::genInitial(void){
 			}
 		}
 		if(!found){
-			fprintf(stderr, "[Error] Cannot found path for all destination from %d\n", srcID);
+//			fprintf(stderr, "[Error] Cannot found path for all destination from %d\n", srcID);
+fprintf(stderr, "Fail\n");
 			exit(1);
 		}
 
@@ -259,7 +260,8 @@ void GenInput::genFinal(void){
 			}
 		}
 		if(!found){
-			fprintf(stderr, "[Error] Cannot found path for all destination from %d\n", srcID);
+//			fprintf(stderr, "[Error] Cannot found path for all destination from %d\n", srcID);
+fprintf(stderr, "Fail\n");
 			exit(1);
 		}
 
@@ -300,9 +302,10 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 		dstID = hopList[i].dstID;
 		linkID = linkMap[srcID][dstID];
 		if(links[linkID].linkCapacity < traffic){
-			fprintf(stderr, "[Error] No enough resource [%d] = %.2lf < %.2lf", linkID, links[linkID].linkCapacity, traffic);
-			if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
-			else fprintf(stderr, "(wired link).\n");
+//			fprintf(stderr, "[Error] No enough resource [%d] = %.2lf < %.2lf", linkID, links[linkID].linkCapacity, traffic);
+fprintf(stderr, "Fail\n");
+//			if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
+//			else fprintf(stderr, "(wired link).\n");
 			exit(1);
 		}
 		links[linkID].linkCapacity -= traffic;
@@ -312,7 +315,8 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 
 			// Transceiver
 			if(trancNode[ switches[srcID].trancID ].nodeCapacity < traffic || trancNode[ switches[dstID].trancID ].nodeCapacity < traffic){
-				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+//				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+fprintf(stderr, "Fail\n");
 				exit(1);
 			}
 			trancNode[ switches[srcID].trancID ].nodeCapacity -= traffic;
@@ -322,7 +326,8 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 			for(int j = 0; j < (int)links[linkID].iList.size(); j++){
 				srcID = links[linkID].iList[j];
 				if(interNode[ switches[srcID].interID ].nodeCapacity < traffic){
-					fprintf(stderr, "[Error] No enough resource (interference node).\n");
+//					fprintf(stderr, "[Error] No enough resource (interference node).\n");
+fprintf(stderr, "Fail\n");
 					exit(1);
 				}
 				interNode[ switches[srcID].interID ].nodeCapacity -= traffic;
