@@ -152,10 +152,10 @@ void GenInput::initialize(int k){
 }
 
 // Generate initial state
-void GenInput::genInitial(void){
+void GenInput::genInitial(int cycleLength){
 
 	// Variable
-	int podID, curID;
+	int podID, curID, picked;
 	Flow ftmp;
 	PathFlow ptmp;
 	ChainRes ctmp;
@@ -168,17 +168,19 @@ void GenInput::genInitial(void){
 	podID = rand()%pod;
 
 	// For all aggregate switch in this pod
+	picked = 0;
 	chainRes.clear();
 	for(int i = 0; i < pod/2; i++){
 		ctmp.aggrID = numOfCore + podID * (pod/2) + i;
 
 		// For each aggregate switch, pick half core switch as chain resource
 		genRandList(randList, pod/2);
-		for(int j = 0; j < pod/3; j++){
+		for(int j = 0; j < pod/3 && picked < cycleLength; j++){
 			ctmp.coreID = ((ctmp.aggrID - numOfCore) % (pod/2)) * (pod/2) + randList[j];
 			ctmp.rID = linkMap[ctmp.aggrID][ctmp.coreID];
 			ctmp.maxRate = 0.0;
 			chainRes.push_back(ctmp);
+			picked++;
 		}
 	}
 
