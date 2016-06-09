@@ -10,7 +10,7 @@ class GenInput{
 	/* Public Functions */
 	public:
 		void initialize(int);		// Initializer
-		void genInitial(void);		// Generate initial state
+		void genInitial(int);		// Generate initial state
 		void genFinal(void);		// Generate final state
 		void output(void);			// Output flow
 

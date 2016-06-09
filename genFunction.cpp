@@ -152,10 +152,10 @@ void GenInput::initialize(int k){
 }
 
 // Generate initial state
-void GenInput::genInitial(void){
+void GenInput::genInitial(int cycleLength){
 
 	// Variable
-	int podID, curID;
+	int podID, curID, picked;
 	Flow ftmp;
 	PathFlow ptmp;
 	ChainRes ctmp;
@@ -167,22 +167,24 @@ void GenInput::genInitial(void){
 	// Randomly pick one pod
 	podID = rand()%pod;
 
-	// For all aggregate switch in this pod
+	// For each aggregate switch
+	picked = 0;
 	chainRes.clear();
 	for(int i = 0; i < pod/2; i++){
 		ctmp.aggrID = numOfCore + podID * (pod/2) + i;
 
-		// For each aggregate switch, pick 2/3 core switch as chain resource
+		// At most pod/3 core is picked
 		genRandList(randList, pod/2);
-		for(int j = 0; j < pod/3; j++){
+		for(int j = 0; j < pod/3 && picked < cycleLength; j++){
 			ctmp.coreID = ((ctmp.aggrID - numOfCore) % (pod/2)) * (pod/2) + randList[j];
 			ctmp.rID = linkMap[ctmp.aggrID][ctmp.coreID];
 			ctmp.maxRate = 0.0;
 			chainRes.push_back(ctmp);
+			picked++;
 		}
 	}
 
-fprintf(stderr, "[Info] Cycle len = %d\n", (int)chainRes.size());
+//fprintf(stderr, "[Info] Cycle len = %d\n", (int)chainRes.size());
 
 	// Fill the last one to 95% capacity
 	curID = chainRes.size()-1;
@@ -219,7 +221,8 @@ fprintf(stderr, "[Info] Cycle len = %d\n", (int)chainRes.size());
 			while(!findAnotherPath(ptmp.hop[0], ptmp.traffic, podID)){
 				retry ++;
 				if(retry > 10){
-					fprintf(stderr, "[Error] Solution not found, GG.\n");
+//					fprintf(stderr, "[Error] Solution not found, GG.\n");
+fprintf(stderr, "Fail\n");
 					exit(1);
 				}
 			}
@@ -276,7 +279,8 @@ fprintf(stderr, "[Info] Cycle len = %d\n", (int)chainRes.size());
 				while(!findAnotherPath(ptmp.hop[0], ptmp.traffic, podID)){
 					retry ++;
 					if(retry > 10){
-						fprintf(stderr, "[Error] Solution not found, GG.\n");
+//						fprintf(stderr, "[Error] Solution not found, GG.\n");
+fprintf(stderr, "Fail\n");
 						exit(1);
 					}
 				}
@@ -340,7 +344,8 @@ void GenInput::genFinal(void){
 	len = chainRes.size();
 	for(int i = 0; i < len; i++){
 		if(chainRes[i].maxRate > links[chainRes[(i+1)%len].rID].linkCapacity + chainRes[(i+1)%len].maxRate){
-			fprintf(stderr, "[Error] Sorry, such plan exists deadlock.\n");
+//			fprintf(stderr, "[Error] Sorry, such plan exists deadlock.\n");
+fprintf(stderr, "Fail\n");
 			exit(1);
 		}
 	}
@@ -355,7 +360,8 @@ void GenInput::genFinal(void){
 		edgeID = flows[ chainRes[i].maxFlowID ].src;
 		traffic = chainRes[i].maxRate;
 		if(!findWiredPath(flows[ chainRes[i].maxFlowID ].pathFlow[0].hop[1], traffic, podID, coreID, aggrID, edgeID)){
-			fprintf(stderr, "[Error] GG, cannot find such a path to gen cycle.\n");
+//			fprintf(stderr, "[Error] GG, cannot find such a path to gen cycle.\n");
+fprintf(stderr, "Fail\n");
 			exit(1);
 		}
 
@@ -396,9 +402,10 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 		dstID = hopList[i].dstID;
 		linkID = linkMap[srcID][dstID];
 		if(links[linkID].linkCapacity < traffic){
-			fprintf(stderr, "[Error] No enough resource ");
-			if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
-			else fprintf(stderr, "(wired link).\n");
+//			fprintf(stderr, "[Error] No enough resource ");
+//			if(links[linkID].isWireless) fprintf(stderr, "(wireless link).\n");
+//			else fprintf(stderr, "(wired link).\n");
+fprintf(stderr, "Fail\n");
 			exit(1);
 		}
 		links[linkID].linkCapacity -= traffic;
@@ -408,7 +415,8 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 
 			// Transceiver
 			if(trancNode[ switches[srcID].trancID ].nodeCapacity < traffic || trancNode[ switches[dstID].trancID ].nodeCapacity < traffic){
-				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+//				fprintf(stderr, "[Error] No enough resource (transceiver node).\n");
+fprintf(stderr, "Fail\n");
 				exit(1);
 			}
 			trancNode[ switches[srcID].trancID ].nodeCapacity -= traffic;
@@ -418,7 +426,8 @@ void GenInput::occupyRes(const vector<Hop>& hopList, double traffic){
 			for(int j = 0; j < (int)links[linkID].iList.size(); j++){
 				srcID = links[linkID].iList[j];
 				if(interNode[ switches[srcID].interID ].nodeCapacity < traffic){
-					fprintf(stderr, "[Error] No enough resource (interference node).\n");
+//					fprintf(stderr, "[Error] No enough resource (interference node).\n");
+fprintf(stderr, "Fail\n");
 					exit(1);
 				}
 				interNode[ switches[srcID].interID ].nodeCapacity -= traffic;
