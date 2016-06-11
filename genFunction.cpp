@@ -152,7 +152,7 @@ void GenInput::initialize(int k){
 }
 
 // Generate initial state
-void GenInput::genInitial(int cycleLength){
+void GenInput::genInitial(int nodeCount){
 
 	// Variable
 	int podID, curID, picked;
@@ -175,7 +175,7 @@ void GenInput::genInitial(int cycleLength){
 
 		// For each aggregate switch, pick half core switch as chain resource
 		genRandList(randList, pod/2);
-		for(int j = 0; j < pod/3 && picked < cycleLength; j++){
+		for(int j = 0; j < pod/3+1 && picked < nodeCount; j++){
 			ctmp.coreID = ((ctmp.aggrID - numOfCore) % (pod/2)) * (pod/2) + randList[j];
 			ctmp.rID = linkMap[ctmp.aggrID][ctmp.coreID];
 			ctmp.maxRate = 0.0;
@@ -297,7 +297,7 @@ fprintf(stderr, "Fail\n");
 			}
 
 			// End:
-			// 1. Reach 95% or more (remain 5% or less)
+			// 1. Reach 99% or more (remain 1% or less)
 			// 2. Chain created
 			if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.01
 			&& chainRes[curID].maxRate > links[ chainRes[curID+1].rID ].linkCapacity) break;
