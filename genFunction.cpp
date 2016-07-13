@@ -237,8 +237,8 @@ fprintf(stderr, "Fail\n");
 			flows.push_back(ftmp);
 		}
 
-		// Reach 99% or more (remain 1% or less)
-		if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.01) break;
+		// Reach 95% or more (remain 5% or less)
+		if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.05) break;
 	}
 
 	// Start from last-1 one to the first one
@@ -296,9 +296,9 @@ fprintf(stderr, "Fail\n");
 			}
 
 			// End:
-			// 1. Reach 99% or more (remain 1% or less)
+			// 1. Reach 95% or more (remain 5% or less)
 			// 2. Chain created
-			if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.01
+			if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.05
 			&& chainRes[curID].maxRate > links[ chainRes[curID+1].rID ].linkCapacity){
 
 				// Break condition:
