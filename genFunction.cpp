@@ -297,9 +297,9 @@ fprintf(stderr, "Fail\n");
 			}
 
 			// End:
-			// 1. Reach 99% or more (remain 1% or less)
+			// 1. Reach 95% or more (remain 5% or less)
 			// 2. Chain created
-			if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.01
+			if(links[ chainRes[curID].rID ].linkCapacity <= LINK_CAPACITY * 0.05
 			&& chainRes[curID].maxRate > links[ chainRes[curID+1].rID ].linkCapacity) break;
 		}
 	}
