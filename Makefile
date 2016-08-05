@@ -1,7 +1,7 @@
 F = 
 CC = g++
 CFLAGS = -c -Wall $(F)
-SRCS = main.cpp vectorOP.cpp genFunction.cpp
+SRCS = main.cpp genFunction.cpp
 OBJS = $(SRCS:.cpp=.o)
 EXEC = main
 TESTCASE = input.txt

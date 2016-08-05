@@ -35,24 +35,14 @@ class GenInput{
 			public:
 				int ID;
 				bool tcamUsage;
-				double posXY[2];
 				vector<int>port;
 				vector<int>linkID;
-				int trancID;
-				int interID;
 		};
 		class Link{
 			public:
 				int srcID;
 				int dstID;
-				bool isWireless;
 				double linkCapacity;
-				vector<int>iList;
-		};
-		class NodeCap{
-			public:
-				int ID;
-				double nodeCapacity;
 		};
 		class ChainRes{
 			public:
@@ -72,8 +62,6 @@ class GenInput{
 		vector<Flow>flows;				// Flow plan to output
 		vector<Switch>switches;			// Switch info
 		vector<Link>links;				// Link info
-		vector<NodeCap>trancNode;		// Transceiver node info
-		vector<NodeCap>interNode;		// Interference node info
 		vector< map<int, int> >linkMap;	// Map the index from (src,dst) to link resource ID
 		vector<ChainRes>chainRes;		// Chain resource
 
@@ -86,8 +74,6 @@ class GenInput{
 		bool findWiredPath(vector<Hop>&, double, int, int, int, int);
 		bool findAnotherPath(vector<Hop>&, double, int);
 		double genTraffic(void);
-		double vecdot(double[2], double[2], double[2], double[2]);
-		double vecdis(double[2], double[2], double[2], double[2]);
 		bool testPort(int, int);
 };
 
